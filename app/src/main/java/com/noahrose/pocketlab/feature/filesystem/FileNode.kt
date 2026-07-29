@@ -8,8 +8,7 @@ class FileNode(
 
     var content: String = "",
 
-    val parent: FileNode? = null,
+    var parent: FileNode? = null,
 
     val children: MutableList<FileNode> = mutableListOf()
-
 )

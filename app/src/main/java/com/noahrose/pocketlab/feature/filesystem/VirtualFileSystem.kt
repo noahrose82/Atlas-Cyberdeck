@@ -160,6 +160,7 @@ object VirtualFileSystem {
                     .asReversed()
                     .joinToString("/")
     }
+
     fun createFile(name: String): Boolean {
 
         val fileName = name.trim()
@@ -194,6 +195,7 @@ object VirtualFileSystem {
 
         return true
     }
+
     fun readFile(name: String): String? {
 
         val fileName = name.trim()
@@ -289,44 +291,6 @@ object VirtualFileSystem {
         return true
     }
 
-    fun moveFile(
-        sourceName: String,
-        destinationName: String
-    ): Boolean {
-
-        val source =
-            _currentDirectory.value.children.firstOrNull {
-
-                it.name.equals(
-                    sourceName.trim(),
-                    ignoreCase = true
-                ) &&
-                        !it.isDirectory
-            }
-
-        if (source == null) {
-            return false
-        }
-
-        val alreadyExists =
-            _currentDirectory.value.children.any {
-
-                it.name.equals(
-                    destinationName.trim(),
-                    ignoreCase = true
-                )
-            }
-
-        if (alreadyExists) {
-            return false
-        }
-
-        source.name = destinationName.trim()
-
-        refreshCurrentEntries()
-
-        return true
-    }
     fun buildTree(): List<String> {
 
         val output = mutableListOf<String>()
@@ -341,6 +305,7 @@ object VirtualFileSystem {
 
         return output
     }
+
     fun find(name: String): List<String> {
 
         val results = mutableListOf<String>()
@@ -354,6 +319,7 @@ object VirtualFileSystem {
 
         return results
     }
+
     private fun buildTreeLines(
         directory: FileNode,
         prefix: String,
@@ -438,30 +404,66 @@ object VirtualFileSystem {
             }
         }
     }
+
     fun copyFile(
         sourceName: String,
         destinationName: String
     ): Boolean {
 
-        val source =
-            _currentDirectory.value.children.firstOrNull {
+        val currentDirectory =
+            _currentDirectory.value
 
+        val source =
+            currentDirectory.children.firstOrNull {
                 it.name.equals(
                     sourceName.trim(),
                     ignoreCase = true
-                ) &&
-                        !it.isDirectory
+                ) && !it.isDirectory
+            } ?: return false
+
+        val cleanDestination =
+            destinationName
+                .trim()
+                .removeSuffix("/")
+
+        val destinationDirectory =
+            currentDirectory.children.firstOrNull {
+                it.name.equals(
+                    cleanDestination,
+                    ignoreCase = true
+                ) && it.isDirectory
             }
 
-        if (source == null) {
-            return false
+        if (destinationDirectory != null) {
+
+            val alreadyExists =
+                destinationDirectory.children.any {
+                    it.name.equals(
+                        source.name,
+                        ignoreCase = true
+                    )
+                }
+
+            if (alreadyExists) {
+                return false
+            }
+
+            destinationDirectory.children.add(
+                FileNode(
+                    name = source.name,
+                    isDirectory = false,
+                    content = source.content,
+                    parent = destinationDirectory
+                )
+            )
+
+            return true
         }
 
         val alreadyExists =
-            _currentDirectory.value.children.any {
-
+            currentDirectory.children.any {
                 it.name.equals(
-                    destinationName.trim(),
+                    cleanDestination,
                     ignoreCase = true
                 )
             }
@@ -470,13 +472,12 @@ object VirtualFileSystem {
             return false
         }
 
-        _currentDirectory.value.children.add(
-
+        currentDirectory.children.add(
             FileNode(
-                name = destinationName.trim(),
+                name = cleanDestination,
                 isDirectory = false,
                 content = source.content,
-                parent = _currentDirectory.value
+                parent = currentDirectory
             )
         )
 
@@ -485,6 +486,77 @@ object VirtualFileSystem {
         return true
     }
 
+    fun moveFile(
+        sourceName: String,
+        destinationName: String
+    ): Boolean {
 
+        val currentDirectory =
+            _currentDirectory.value
 
+        val source =
+            currentDirectory.children.firstOrNull {
+                it.name.equals(
+                    sourceName.trim(),
+                    ignoreCase = true
+                ) && !it.isDirectory
+            } ?: return false
+
+        val cleanDestination =
+            destinationName
+                .trim()
+                .removeSuffix("/")
+
+        val destinationDirectory =
+            currentDirectory.children.firstOrNull {
+                it.name.equals(
+                    cleanDestination,
+                    ignoreCase = true
+                ) && it.isDirectory
+            }
+
+        if (destinationDirectory != null) {
+
+            val alreadyExists =
+                destinationDirectory.children.any {
+                    it.name.equals(
+                        source.name,
+                        ignoreCase = true
+                    )
+                }
+
+            if (alreadyExists) {
+                return false
+            }
+
+            currentDirectory.children.remove(source)
+
+            source.name = cleanDestination
+
+            destinationDirectory.children.add(source)
+
+            refreshCurrentEntries()
+
+            return true
+        }
+
+        val alreadyExists =
+            currentDirectory.children.any {
+                it.name.equals(
+                    cleanDestination,
+                    ignoreCase = true
+                )
+            }
+
+        if (alreadyExists) {
+            return false
+        }
+
+        source.name =
+            cleanDestination
+
+        refreshCurrentEntries()
+
+        return true
+    }
 }

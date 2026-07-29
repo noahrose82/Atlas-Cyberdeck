@@ -1,27 +1,170 @@
 package com.noahrose.pocketlab.feature.terminal
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
-
+import com.noahrose.pocketlab.feature.terminal.alias.CommandAliases
+import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
+import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
+import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
 object TerminalCommandProcessor {
 
     fun process(
         command: String,
         output: MutableList<String>
     ) {
+        val trimmedCommand =
+            CommandAliases.resolve(command).trim()
 
-        val currentPath = VirtualFileSystem.currentPath.value
+        val expandedCommand =
+            WildcardExpander.expand(
+                VariableExpander.expand(
+                    trimmedCommand
+                )
+            )
+        /*
+         * History expansion commands are not stored directly.
+         *
+         * Examples:
+         * !!
+         * !2
+         * !mkdir
+         */
+        if (!trimmedCommand.startsWith("!")) {
+            CommandHistory.add(trimmedCommand)
+        }
 
-        output.add("atlas@cyberdeck:$currentPath$ $command")
+        val currentPath =
+            VirtualFileSystem.currentPath.value
 
-        val parts = command.trim().split(" ", limit = 2)
+        output.add(
+            "atlas@cyberdeck:$currentPath$ $trimmedCommand"
+        )
 
-        when (parts[0].lowercase()) {
+        if (trimmedCommand.isBlank()) {
+            return
+        }
 
-            "help" -> {
+        val parts =
+            expandedCommand.split(
+                Regex("\\s+"),
+                limit = 2
+            )
+
+        val commandName =
+            parts[0].lowercase()
+
+        when {
+
+            /*
+             * Repeat the most recent command.
+             */
+            commandName == "!!" -> {
+
+                val lastCommand =
+                    CommandHistory.lastCommand()
+
+                if (lastCommand == null) {
+
+                    output.add(
+                        "No previous command found."
+                    )
+
+                } else {
+
+                    output.add(
+                        "Executing: $lastCommand"
+                    )
+
+                    process(
+                        lastCommand,
+                        output
+                    )
+                }
+            }
+
+            /*
+             * Execute a command by its history number.
+             *
+             * Example:
+             * !2
+             */
+            commandName.startsWith("!") -> {
+
+                val historyReference =
+                    commandName.drop(1)
+
+                val historyNumber =
+                    historyReference.toIntOrNull()
+
+                if (historyNumber != null) {
+
+                    if (historyNumber < 1) {
+
+                        output.add(
+                            "History numbers begin at 1."
+                        )
+
+                    } else {
+
+                        val historyCommand =
+                            CommandHistory.getCommand(
+                                historyNumber - 1
+                            )
+
+                        if (historyCommand == null) {
+
+                            output.add(
+                                "No such history entry: $historyNumber"
+                            )
+
+                        } else {
+
+                            output.add(
+                                "Executing: $historyCommand"
+                            )
+
+                            process(
+                                historyCommand,
+                                output
+                            )
+                        }
+                    }
+
+                } else {
+
+                    val historyCommand =
+                        CommandHistory.findLastStartingWith(
+                            historyReference
+                        )
+
+                    if (historyCommand == null) {
+
+                        output.add(
+                            "No command starts with '$historyReference'"
+                        )
+
+                    } else {
+
+                        output.add(
+                            "Executing: $historyCommand"
+                        )
+
+                        process(
+                            historyCommand,
+                            output
+                        )
+                    }
+                }
+            }
+
+            commandName == "help" -> {
+
                 output.add("Available commands:")
                 output.add("")
                 output.add("tree")
                 output.add("help")
+                output.add("history")
+                output.add("!!")
+                output.add("!<number>")
                 output.add("cp")
                 output.add("mv")
                 output.add("find")
@@ -30,6 +173,9 @@ object TerminalCommandProcessor {
                 output.add("pwd")
                 output.add("ls")
                 output.add("mkdir")
+                output.add("touch")
+                output.add("cat")
+                output.add("echo")
                 output.add("rmdir")
                 output.add("rm")
                 output.add("cd")
@@ -37,65 +183,163 @@ object TerminalCommandProcessor {
                 output.add("neofetch")
             }
 
-            "clear" -> {
-                output.clear()
-            }
+            commandName == "history" -> {
 
-            "whoami" -> {
-                output.add("atlas")
-            }
+                val history =
+                    CommandHistory.getHistory()
 
-            "pwd" -> {
-                output.add(
-                    VirtualFileSystem.currentPath.value
-                        .replace("~", "/home/atlas")
-                )
-            }
+                if (history.isEmpty()) {
 
-            "ls" -> {
-
-                val entries =
-                    VirtualFileSystem.currentEntries.value
-
-                if (entries.isEmpty()) {
-
-                    output.add("<empty>")
+                    output.add(
+                        "No commands in history."
+                    )
 
                 } else {
 
-                    entries.forEach { entry ->
+                    history.forEachIndexed {
+                            index,
+                            historyCommand ->
 
-                        if (entry.isDirectory) {
-                            output.add("${entry.name}/")
-                        } else {
-                            output.add(entry.name)
+                        output.add(
+                            "${index + 1}  $historyCommand"
+                        )
+                    }
+                }
+            }
 
+            commandName == "clear" -> {
+
+                output.clear()
+            }
+
+            commandName == "whoami" -> {
+
+                output.add("atlas")
+            }
+
+            commandName == "pwd" -> {
+
+                output.add(
+                    VirtualFileSystem
+                        .currentPath
+                        .value
+                        .replace(
+                            "~",
+                            "/home/atlas"
+                        )
+                )
+            }
+
+            commandName == "ls" -> {
+
+                val entries =
+                    VirtualFileSystem
+                        .currentEntries
+                        .value
+
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+
+                    if (entries.isEmpty()) {
+
+                        output.add("<empty>")
+
+                    } else {
+
+                        entries.forEach { entry ->
+
+                            if (entry.isDirectory) {
+
+                                output.add(
+                                    "${entry.name}/"
+                                )
+
+                            } else {
+
+                                output.add(
+                                    entry.name
+                                )
+                            }
+                        }
+                    }
+
+                } else {
+
+                    val requestedNames =
+                        parts[1]
+                            .trim()
+                            .split(
+                                Regex("\\s+")
+                            )
+
+                    val matchingEntries =
+                        requestedNames.mapNotNull { requestedName ->
+
+                            entries.find { entry ->
+                                entry.name == requestedName
+                            }
+                        }
+
+                    if (matchingEntries.isEmpty()) {
+
+                        output.add(
+                            "ls: no matching files found"
+                        )
+
+                    } else {
+
+                        matchingEntries.forEach { entry ->
+
+                            if (entry.isDirectory) {
+
+                                output.add(
+                                    "${entry.name}/"
+                                )
+
+                            } else {
+
+                                output.add(
+                                    entry.name
+                                )
+                            }
                         }
                     }
                 }
             }
-            "tree" -> {
+
+            commandName == "tree" -> {
 
                 val treeLines =
                     VirtualFileSystem.buildTree()
 
                 treeLines.forEach { line ->
+
                     output.add(line)
                 }
             }
 
-            "find" -> {
+            commandName == "find" -> {
 
-                if (parts.size < 2 || parts[1].isBlank()) {
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
 
-                    output.add("Usage: find <name>")
+                    output.add(
+                        "Usage: find <name>"
+                    )
 
                 } else {
 
-                    val targetName = parts[1].trim()
+                    val targetName =
+                        parts[1].trim()
 
                     val results =
-                        VirtualFileSystem.find(targetName)
+                        VirtualFileSystem.find(
+                            targetName
+                        )
 
                     if (results.isEmpty()) {
 
@@ -106,67 +350,89 @@ object TerminalCommandProcessor {
                     } else {
 
                         results.forEach { path ->
+
                             output.add(path)
                         }
                     }
                 }
             }
 
-            "cp" -> {
+            commandName == "cp" -> {
 
-                if (parts.size < 2) {
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
 
                     output.add(
-                        "Usage: cp <source> <destination>"
+                        "Usage: cp <source...> <destination>"
                     )
 
                 } else {
 
                     val arguments =
-                        parts[1].trim().split(
-                            Regex("\\s+"),
-                            limit = 2
-                        )
+                        parts[1]
+                            .trim()
+                            .split(
+                                Regex("\\s+")
+                            )
 
                     if (arguments.size < 2) {
 
                         output.add(
-                            "Usage: cp <source> <destination>"
+                            "Usage: cp <source...> <destination>"
                         )
 
                     } else {
 
-                        val source =
-                            arguments[0]
-
                         val destination =
-                            arguments[1]
+                            arguments.last()
 
-                        val copied =
-                            VirtualFileSystem.copyFile(
-                                sourceName = source,
-                                destinationName = destination
-                            )
+                        val sources =
+                            arguments.dropLast(1)
 
-                        if (copied) {
+                        var copiedCount = 0
+
+                        sources.forEach { source ->
+
+                            val copied =
+                                VirtualFileSystem.copyFile(
+                                    sourceName = source,
+                                    destinationName = destination
+                                )
+
+                            if (copied) {
+
+                                copiedCount++
+
+                                output.add(
+                                    "Copied '$source' to '$destination'"
+                                )
+
+                            } else {
+
+                                output.add(
+                                    "cp: failed to copy '$source'"
+                                )
+                            }
+                        }
+
+                        if (copiedCount == 0) {
 
                             output.add(
-                                "Copied '$source' to '$destination'"
-                            )
-
-                        } else {
-
-                            output.add(
-                                "cp: failed to copy '$source'"
+                                "cp: no files copied"
                             )
                         }
                     }
                 }
             }
 
-            "mv" -> {
+            commandName == "mv" -> {
 
-                if (parts.size < 2) {
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
 
                     output.add(
                         "Usage: mv <source> <destination>"
@@ -175,10 +441,12 @@ object TerminalCommandProcessor {
                 } else {
 
                     val arguments =
-                        parts[1].trim().split(
-                            Regex("\\s+"),
-                            limit = 2
-                        )
+                        parts[1]
+                            .trim()
+                            .split(
+                                Regex("\\s+"),
+                                limit = 2
+                            )
 
                     if (arguments.size < 2) {
 
@@ -216,65 +484,101 @@ object TerminalCommandProcessor {
                 }
             }
 
-            "mkdir" -> {
+            commandName == "mkdir" -> {
 
-                if (parts.size < 2 || parts[1].isBlank()) {
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
 
-                    output.add("Usage: mkdir <directory>")
+                    output.add(
+                        "Usage: mkdir <directory>"
+                    )
 
                 } else {
 
-                    val directoryName = parts[1].trim()
+                    val directoryName =
+                        parts[1].trim()
 
                     val created =
-                        VirtualFileSystem.createDirectory(directoryName)
+                        VirtualFileSystem
+                            .createDirectory(
+                                directoryName
+                            )
 
                     if (created) {
 
-                        output.add("Directory created: $directoryName")
+                        output.add(
+                            "Directory created: $directoryName"
+                        )
 
                     } else {
 
                         output.add(
                             "mkdir: '$directoryName' already exists"
                         )
-
                     }
                 }
             }
 
-            "cd" -> {
-                if (parts.size < 2 || parts[1].isBlank()) {
-                    output.add("Usage: cd <directory>")
+            commandName == "cd" -> {
+
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+
+                    output.add(
+                        "Usage: cd <directory>"
+                    )
+
                 } else {
-                    val destination = parts[1].trim()
+
+                    val destination =
+                        parts[1].trim()
 
                     val changed =
-                        VirtualFileSystem.changeDirectory(destination)
+                        VirtualFileSystem
+                            .changeDirectory(
+                                destination
+                            )
 
                     if (!changed) {
+
                         output.add(
                             "cd: $destination: No such directory"
                         )
                     }
                 }
             }
-            "touch" -> {
 
-                if (parts.size < 2 || parts[1].isBlank()) {
+            commandName == "touch" -> {
 
-                    output.add("Usage: touch <filename>")
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+
+                    output.add(
+                        "Usage: touch <filename>"
+                    )
 
                 } else {
 
-                    val fileName = parts[1].trim()
+                    val fileName =
+                        parts[1].trim()
 
                     val created =
-                        VirtualFileSystem.createFile(fileName)
+                        VirtualFileSystem
+                            .createFile(
+                                fileName
+                            )
 
                     if (created) {
 
-                        output.add("File created: $fileName")
+                        output.add(
+                            "File created: $fileName"
+                        )
 
                     } else {
 
@@ -284,51 +588,93 @@ object TerminalCommandProcessor {
                     }
                 }
             }
-            "cat" -> {
 
-                if (parts.size < 2 || parts[1].isBlank()) {
+            commandName == "cat" -> {
 
-                    output.add("Usage: cat <filename>")
-
-                } else {
-
-                    val fileName = parts[1].trim()
-
-                    val content =
-                        VirtualFileSystem.readFile(fileName)
-
-                    if (content == null) {
-
-                        output.add(
-                            "cat: $fileName: No such file"
-                        )
-
-                    } else if (content.isEmpty()) {
-
-                        output.add("<empty>")
-
-                    } else {
-
-                        output.add(content)
-                    }
-                }
-            }
-
-            "echo" -> {
-
-                val input =
-                    command.removePrefix("echo").trim()
-
-                if (!input.contains(">")) {
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
 
                     output.add(
-                        "Usage: echo <text> > <filename>"
+                        "Usage: cat <filename>"
                     )
 
                 } else {
 
+                    val fileNames =
+                        parts[1]
+                            .trim()
+                            .split(
+                                Regex("\\s+")
+                            )
+
+                    fileNames.forEachIndexed { index, fileName ->
+
+                        val content =
+                            VirtualFileSystem.readFile(
+                                fileName
+                            )
+
+                        if (content == null) {
+
+                            output.add(
+                                "cat: $fileName: No such file"
+                            )
+
+                        } else {
+
+                            if (fileNames.size > 1) {
+
+                                output.add(
+                                    "----- $fileName -----"
+                                )
+                            }
+
+                            if (content.isEmpty()) {
+
+                                output.add("<empty>")
+
+                            } else {
+
+                                output.add(content)
+                            }
+
+                            if (
+                                fileNames.size > 1 &&
+                                index != fileNames.lastIndex
+                            ) {
+                                output.add("")
+                            }
+                        }
+                    }
+                }
+            }
+
+            commandName == "echo" -> {
+
+                val input =
+                    if (parts.size < 2) {
+                        ""
+                    } else {
+                        parts[1].trim()
+                    }
+
+                if (input.isBlank()) {
+
+                    output.add("")
+
+                } else if (!input.contains(">")) {
+
+                    output.add(input)
+
+                } else {
+
                     val pieces =
-                        input.split(">", limit = 2)
+                        input.split(
+                            ">",
+                            limit = 2
+                        )
 
                     val text =
                         pieces[0].trim()
@@ -336,65 +682,111 @@ object TerminalCommandProcessor {
                     val fileName =
                         pieces[1].trim()
 
-                    val success =
-                        VirtualFileSystem.writeFile(
-                            name = fileName,
-                            content = text
-                        )
-
-                    if (success) {
+                    if (fileName.isBlank()) {
 
                         output.add(
-                            "Wrote to $fileName"
+                            "Usage: echo <text> > <filename>"
                         )
 
                     } else {
 
+                        val success =
+                            VirtualFileSystem.writeFile(
+                                name = fileName,
+                                content = text
+                            )
+
+                        if (success) {
+
+                            output.add(
+                                "Wrote to $fileName"
+                            )
+
+                        } else {
+
+                            output.add(
+                                "echo: $fileName: No such file"
+                            )
+                        }
+                    }
+                }
+            }
+
+            commandName == "rm" -> {
+
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+
+                    output.add(
+                        "Usage: rm <filename>"
+                    )
+
+                } else {
+
+                    val fileNames =
+                        parts[1]
+                            .trim()
+                            .split(
+                                Regex("\\s+")
+                            )
+
+                    var deletedCount = 0
+
+                    fileNames.forEach { fileName ->
+
+                        val deleted =
+                            VirtualFileSystem.deleteFile(
+                                fileName
+                            )
+
+                        if (deleted) {
+
+                            output.add(
+                                "Deleted: $fileName"
+                            )
+
+                            deletedCount++
+
+                        } else {
+
+                            output.add(
+                                "rm: $fileName: No such file"
+                            )
+                        }
+                    }
+
+                    if (deletedCount == 0) {
+
                         output.add(
-                            "echo: $fileName: No such file"
+                            "No files were deleted."
                         )
                     }
                 }
             }
 
-            "rm" -> {
+            commandName == "rmdir" -> {
 
-                if (parts.size < 2 || parts[1].isBlank()) {
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
 
-                    output.add("Usage: rm <filename>")
-
-                } else {
-
-                    val fileName = parts[1].trim()
-
-                    val deleted =
-                        VirtualFileSystem.deleteFile(fileName)
-
-                    if (deleted) {
-
-                        output.add("Deleted: $fileName")
-
-                    } else {
-
-                        output.add(
-                            "rm: $fileName: No such file"
-                        )
-                    }
-                }
-            }
-
-            "rmdir" -> {
-
-                if (parts.size < 2 || parts[1].isBlank()) {
-
-                    output.add("Usage: rmdir <directory>")
+                    output.add(
+                        "Usage: rmdir <directory>"
+                    )
 
                 } else {
 
-                    val directoryName = parts[1].trim()
+                    val directoryName =
+                        parts[1].trim()
 
                     val deleted =
-                        VirtualFileSystem.deleteDirectory(directoryName)
+                        VirtualFileSystem
+                            .deleteDirectory(
+                                directoryName
+                            )
 
                     if (deleted) {
 
@@ -411,23 +803,38 @@ object TerminalCommandProcessor {
                 }
             }
 
-            "status" -> {
+            commandName == "status" -> {
+
                 output.add("Atlas Cyberdeck")
                 output.add("Status : ONLINE")
                 output.add("Linux : INSTALLED")
                 output.add("Terminal : ACTIVE")
             }
 
-            "neofetch" -> {
-                output.add("Atlas Cyberdeck v0.6.0 \"Forge\"")
-                output.add("OS      : Atlas Linux")
-                output.add("Kernel  : 6.1")
-                output.add("Shell   : Atlas Terminal")
-                output.add("User    : atlas")
+            commandName == "neofetch" -> {
+
+                output.add(
+                    "Atlas Cyberdeck v0.9.0 \"Forge\""
+                )
+                output.add(
+                    "OS      : Atlas Linux"
+                )
+                output.add(
+                    "Kernel  : 6.1"
+                )
+                output.add(
+                    "Shell   : Atlas Terminal"
+                )
+                output.add(
+                    "User    : atlas"
+                )
             }
 
             else -> {
-                output.add("Command not found: $command")
+
+                output.add(
+                    "Command not found: $trimmedCommand"
+                )
             }
         }
     }
