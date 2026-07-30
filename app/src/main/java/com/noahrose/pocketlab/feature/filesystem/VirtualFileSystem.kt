@@ -531,7 +531,7 @@ object VirtualFileSystem {
 
             currentDirectory.children.remove(source)
 
-            source.name = cleanDestination
+            source.parent = destinationDirectory
 
             destinationDirectory.children.add(source)
 

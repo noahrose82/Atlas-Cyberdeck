@@ -435,7 +435,7 @@ object TerminalCommandProcessor {
                 ) {
 
                     output.add(
-                        "Usage: mv <source> <destination>"
+                        "Usage: mv <source...> <destination>"
                     )
 
                 } else {
@@ -444,40 +444,53 @@ object TerminalCommandProcessor {
                         parts[1]
                             .trim()
                             .split(
-                                Regex("\\s+"),
-                                limit = 2
+                                Regex("\\s+")
                             )
 
                     if (arguments.size < 2) {
 
                         output.add(
-                            "Usage: mv <source> <destination>"
+                            "Usage: mv <source...> <destination>"
                         )
 
                     } else {
 
-                        val source =
-                            arguments[0]
-
                         val destination =
-                            arguments[1]
+                            arguments.last()
 
-                        val moved =
-                            VirtualFileSystem.moveFile(
-                                sourceName = source,
-                                destinationName = destination
-                            )
+                        val sources =
+                            arguments.dropLast(1)
 
-                        if (moved) {
+                        var movedCount = 0
+
+                        sources.forEach { source ->
+
+                            val moved =
+                                VirtualFileSystem.moveFile(
+                                    sourceName = source,
+                                    destinationName = destination
+                                )
+
+                            if (moved) {
+
+                                movedCount++
+
+                                output.add(
+                                    "Moved '$source' to '$destination'"
+                                )
+
+                            } else {
+
+                                output.add(
+                                    "mv: failed to move '$source'"
+                                )
+                            }
+                        }
+
+                        if (movedCount == 0) {
 
                             output.add(
-                                "Renamed '$source' to '$destination'"
-                            )
-
-                        } else {
-
-                            output.add(
-                                "mv: failed to rename '$source'"
+                                "mv: no files moved"
                             )
                         }
                     }
