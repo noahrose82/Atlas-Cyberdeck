@@ -52,6 +52,180 @@ object TerminalCommandProcessor {
         val commandName =
             parts[0].lowercase()
 
+        if (expandedCommand.contains("|")) {
+
+            val pipeParts =
+                expandedCommand.split(
+                    "|",
+                    limit = 2
+                )
+
+            val leftCommand =
+                pipeParts[0].trim()
+
+            val rightCommand =
+                pipeParts[1].trim()
+
+            if (
+                leftCommand.isBlank() ||
+                rightCommand.isBlank()
+            ) {
+                output.add(
+                    "Usage: <command> | <command>"
+                )
+                return
+            }
+
+            val leftParts =
+                leftCommand.split(
+                    Regex("\\s+")
+                )
+
+            val rightParts =
+                rightCommand.split(
+                    Regex("\\s+"),
+                    limit = 2
+                )
+
+            val leftCommandName =
+                leftParts[0].lowercase()
+
+            val rightCommandName =
+                rightParts[0].lowercase()
+
+            val pipedLines =
+                mutableListOf<String>()
+
+            when (leftCommandName) {
+
+                "cat" -> {
+
+                    if (leftParts.size < 2) {
+
+                        output.add(
+                            "Usage: cat <filename> | <command>"
+                        )
+                        return
+                    }
+
+                    val fileNames =
+                        leftParts.drop(1)
+
+                    fileNames.forEach { fileName ->
+
+                        val content =
+                            VirtualFileSystem.readFile(
+                                fileName
+                            )
+
+                        if (content == null) {
+
+                            output.add(
+                                "cat: $fileName: No such file"
+                            )
+
+                        } else {
+
+                            pipedLines.addAll(
+                                content.lines()
+                            )
+                        }
+                    }
+                }
+
+                "echo" -> {
+
+                    val echoText =
+                        leftCommand
+                            .removePrefix(leftParts[0])
+                            .trim()
+
+                    pipedLines.add(
+                        echoText
+                    )
+                }
+
+                else -> {
+
+                    output.add(
+                        "pipe: unsupported input command: $leftCommandName"
+                    )
+                    return
+                }
+            }
+
+            when (rightCommandName) {
+
+                "grep" -> {
+
+                    if (
+                        rightParts.size < 2 ||
+                        rightParts[1].isBlank()
+                    ) {
+
+                        output.add(
+                            "Usage: <command> | grep <text>"
+                        )
+                        return
+                    }
+
+                    val searchText =
+                        rightParts[1].trim()
+
+                    val matches =
+                        pipedLines.filter { line ->
+
+                            line.contains(
+                                searchText
+                            )
+                        }
+
+                    if (matches.isEmpty()) {
+
+                        output.add(
+                            "No matches found."
+                        )
+
+                    } else {
+
+                        matches.forEach { line ->
+
+                            output.add(line)
+                        }
+                    }
+                }
+
+                "head" -> {
+
+                    pipedLines
+                        .take(3)
+                        .forEach { line ->
+
+                            output.add(line)
+                        }
+                }
+
+                "tail" -> {
+
+                    pipedLines
+                        .takeLast(3)
+                        .forEach { line ->
+
+                            output.add(line)
+                        }
+                }
+
+                else -> {
+
+                    output.add(
+                        "pipe: unsupported output command: $rightCommandName"
+                    )
+                }
+            }
+
+            return
+        }
+
         when {
 
             /*
@@ -172,6 +346,9 @@ object TerminalCommandProcessor {
                 output.add("whoami")
                 output.add("pwd")
                 output.add("ls")
+                output.add("grep")
+                output.add("head")
+                output.add("tail")
                 output.add("mkdir")
                 output.add("touch")
                 output.add("cat")
@@ -497,6 +674,156 @@ object TerminalCommandProcessor {
                 }
             }
 
+            commandName == "grep" -> {
+
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+
+                    output.add(
+                        "Usage: grep <text> <filename>"
+                    )
+
+                } else {
+
+                    val arguments =
+                        parts[1]
+                            .trim()
+                            .split(
+                                Regex("\\s+"),
+                                limit = 2
+                            )
+
+                    if (arguments.size < 2) {
+
+                        output.add(
+                            "Usage: grep <text> <filename>"
+                        )
+
+                    } else {
+
+                        val searchText =
+                            arguments[0]
+
+                        val fileName =
+                            arguments[1]
+
+                        val content =
+                            VirtualFileSystem.readFile(
+                                fileName
+                            )
+
+                        if (content == null) {
+
+                            output.add(
+                                "grep: $fileName: No such file"
+                            )
+
+                        } else {
+
+                            val matches =
+                                content
+                                    .lines()
+                                    .filter {
+                                        it.contains(searchText)
+                                    }
+
+                            if (matches.isEmpty()) {
+
+                                output.add(
+                                    "No matches found."
+                                )
+
+                            } else {
+
+                                matches.forEach {
+                                    output.add(it)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            commandName == "head" -> {
+
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+
+                    output.add(
+                        "Usage: head <filename>"
+                    )
+
+                } else {
+
+                    val fileName =
+                        parts[1].trim()
+
+                    val content =
+                        VirtualFileSystem.readFile(
+                            fileName
+                        )
+
+                    if (content == null) {
+
+                        output.add(
+                            "head: $fileName: No such file"
+                        )
+
+                    } else {
+
+                        content
+                            .lines()
+                            .take(3)
+                            .forEach {
+
+                                output.add(it)
+                            }
+                    }
+                }
+            }
+            commandName == "tail" -> {
+
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+
+                    output.add(
+                        "Usage: tail <filename>"
+                    )
+
+                } else {
+
+                    val fileName =
+                        parts[1].trim()
+
+                    val content =
+                        VirtualFileSystem.readFile(
+                            fileName
+                        )
+
+                    if (content == null) {
+
+                        output.add(
+                            "tail: $fileName: No such file"
+                        )
+
+                    } else {
+
+                        content
+                            .lines()
+                            .takeLast(3)
+                            .forEach {
+                                output.add(it)
+                            }
+                    }
+                }
+            }
+
             commandName == "mkdir" -> {
 
                 if (
@@ -673,54 +1000,123 @@ object TerminalCommandProcessor {
                         parts[1].trim()
                     }
 
-                if (input.isBlank()) {
+                when {
 
-                    output.add("")
+                    input.isBlank() -> {
 
-                } else if (!input.contains(">")) {
+                        output.add("")
+                    }
 
-                    output.add(input)
+                    input.contains(">>") -> {
 
-                } else {
-
-                    val pieces =
-                        input.split(
-                            ">",
-                            limit = 2
-                        )
-
-                    val text =
-                        pieces[0].trim()
-
-                    val fileName =
-                        pieces[1].trim()
-
-                    if (fileName.isBlank()) {
-
-                        output.add(
-                            "Usage: echo <text> > <filename>"
-                        )
-
-                    } else {
-
-                        val success =
-                            VirtualFileSystem.writeFile(
-                                name = fileName,
-                                content = text
+                        val pieces =
+                            input.split(
+                                ">>",
+                                limit = 2
                             )
 
-                        if (success) {
+                        val text =
+                            pieces[0].trim()
+
+                        val fileName =
+                            pieces[1].trim()
+
+                        if (fileName.isBlank()) {
 
                             output.add(
-                                "Wrote to $fileName"
+                                "Usage: echo <text> >> <filename>"
                             )
 
                         } else {
 
-                            output.add(
-                                "echo: $fileName: No such file"
-                            )
+                            val existingContent =
+                                VirtualFileSystem.readFile(
+                                    fileName
+                                )
+
+                            if (existingContent == null) {
+
+                                output.add(
+                                    "echo: $fileName: No such file"
+                                )
+
+                            } else {
+
+                                val updatedContent =
+                                    if (existingContent.isEmpty()) {
+                                        text
+                                    } else {
+                                        "$existingContent\n$text"
+                                    }
+
+                                val success =
+                                    VirtualFileSystem.writeFile(
+                                        name = fileName,
+                                        content = updatedContent
+                                    )
+
+                                if (success) {
+
+                                    output.add(
+                                        "Appended to $fileName"
+                                    )
+
+                                } else {
+
+                                    output.add(
+                                        "echo: $fileName: No such file"
+                                    )
+                                }
+                            }
                         }
+                    }
+
+                    input.contains(">") -> {
+
+                        val pieces =
+                            input.split(
+                                ">",
+                                limit = 2
+                            )
+
+                        val text =
+                            pieces[0].trim()
+
+                        val fileName =
+                            pieces[1].trim()
+
+                        if (fileName.isBlank()) {
+
+                            output.add(
+                                "Usage: echo <text> > <filename>"
+                            )
+
+                        } else {
+
+                            val success =
+                                VirtualFileSystem.writeFile(
+                                    name = fileName,
+                                    content = text
+                                )
+
+                            if (success) {
+
+                                output.add(
+                                    "Wrote to $fileName"
+                                )
+
+                            } else {
+
+                                output.add(
+                                    "echo: $fileName: No such file"
+                                )
+                            }
+                        }
+                    }
+
+                    else -> {
+
+                        output.add(input)
                     }
                 }
             }
