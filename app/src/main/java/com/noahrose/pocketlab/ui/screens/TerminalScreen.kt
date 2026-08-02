@@ -15,7 +15,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.noahrose.pocketlab.feature.terminal.TerminalViewModel
-
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 @Composable
 fun TerminalScreen(
     terminalViewModel: TerminalViewModel = viewModel()
@@ -38,35 +44,61 @@ fun TerminalScreen(
             )
         }
 
-        BasicTextField(
-            value = uiState.currentCommand,
-            onValueChange = { value ->
+        Column(
+            modifier = Modifier.fillMaxWidth()
+        ) {
 
-                if (value.contains("\n")) {
-                    terminalViewModel.executeCommand()
-                } else {
-                    terminalViewModel.updateCommand(value)
+            BasicTextField(
+                value = uiState.currentCommand,
+
+                onValueChange = { value ->
+
+                    if (value.contains("\n")) {
+
+                        terminalViewModel.executeCommand()
+
+                    } else {
+
+                        terminalViewModel.updateCommand(value)
+                    }
+                },
+
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onPreviewKeyEvent { keyEvent ->
+
+                        if (
+                            keyEvent.type == KeyEventType.KeyDown &&
+                            keyEvent.key == Key.Tab
+                        ) {
+
+                            terminalViewModel.completeCommand()
+
+                            true
+
+                        } else {
+
+                            false
+                        }
+                    },
+
+                textStyle = TextStyle(
+                    color = MaterialTheme.colorScheme.primary
+                ),
+
+                decorationBox = { innerTextField ->
+
+                    Column {
+
+                        Text(
+                            text = "atlas@cyberdeck:~$ ",
+                            color = MaterialTheme.colorScheme.primary
+                        )
+
+                        innerTextField()
+                    }
                 }
-
-            },
-            modifier = Modifier.fillMaxWidth(),
-            textStyle = TextStyle(
-                color = MaterialTheme.colorScheme.primary
-            ),
-            decorationBox = { innerTextField ->
-
-                Column {
-
-                    Text(
-                        text = "atlas@cyberdeck:~$ ",
-                        color = MaterialTheme.colorScheme.primary
-                    )
-
-                    innerTextField()
-
-                }
-
-            }
-        )
+            )
+        }
     }
 }
