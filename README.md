@@ -1,38 +1,76 @@
 # Atlas Cyberdeck
 
-> A portable Linux workspace and cybersecurity toolkit for developers, system administrators, and security professionals.
+![Atlas Cyberdeck Banner](docs/images/atlas-cyberdeck-banner.png)
+
+> **Portable Linux Workspace • Cybersecurity Toolkit • Android • Kotlin**
 
 ---
 
 ## Overview
 
-Atlas Cyberdeck is an Android application being developed by Atlas Labs to provide a portable Linux workspace, cybersecurity toolkit, and developer environment on mobile devices.
+Atlas Cyberdeck is an open-source Android application developed by Atlas Labs that brings a Linux-inspired workspace to mobile devices.
 
-The project is designed with a long-term vision of supporting multiple platforms while maintaining a consistent architecture and user experience.
+The project combines a virtual terminal, virtual filesystem, and modular architecture into a portable platform designed for developers, system administrators, cybersecurity professionals, and technology enthusiasts.
 
-Current development focuses on creating a stable Android foundation before expanding to desktop platforms.
+Atlas Cyberdeck is built with modern Android development practices and designed to grow into a complete portable cyberdeck platform.
 
 ---
 
 ## Current Features
 
+### Terminal
+
+- Linux-style shell
+- Command history
+- Command aliases
+- Environment variables
+- Wildcard expansion
+- Hardware keyboard Tab completion
+- Command pipelines
+- `grep`
+- `head`
+- `tail`
+
+### Virtual File System
+
+- Directory navigation
+- File creation
+- File deletion
+- File reading
+- File writing
+- Directory creation
+- Directory deletion
+- File copy
+- File move
+- Tree view
+
+### User Interface
+
+- Material 3
+- Multi-screen navigation
 - Dashboard
-- Boot Experience
-- Linux Manager Foundation
-- Navigation System
-- Material 3 User Interface
+- Boot screen
+- Linux workspace foundation
 
 ---
 
-## Planned Features
+## Screenshots
 
-- Terminal
-- SSH Client
-- File Manager
-- Git Integration
-- Package Manager
-- Rootless Linux Runtime
-- Plugin System
+### Dashboard
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+### Terminal
+
+![Terminal](docs/screenshots/terminal.png)
+
+### Virtual File System
+
+![Virtual File System](docs/screenshots/filesystem.png)
+
+### Boot Screen
+
+![Boot Screen](docs/screenshots/boot.png)
 
 ---
 
@@ -41,35 +79,73 @@ Current development focuses on creating a stable Android foundation before expan
 - Kotlin
 - Jetpack Compose
 - Material 3
-- Android Studio
+- Android ViewModel
+- StateFlow
 - Gradle
-
----
-
-## Development Philosophy
-
-Atlas Cyberdeck is developed one stable release at a time.
-
-Every release is expected to:
-
-- Build successfully
-- Pass manual testing
-- Be committed
-- Be tagged
-- Be pushed to GitHub and GitLab
 
 ---
 
 ## Project Status
 
-Current Release
+Current milestone:
 
-v0.5.0
+**v0.9.0-alpha**
 
-Linux Manager Foundation
+Current focus:
+
+- Filesystem architecture
+- Terminal improvements
+- Documentation
+- Version 1.0 preparation
+
+---
+
+## Documentation
+
+Additional documentation is available in this repository.
+
+- Architecture
+- Roadmap
+- Changelog
+- Architecture Decision Records
+- Security Policy
+- Contributing Guide
+- Code of Conduct
+
+---
+
+## Roadmap
+
+Planned features include:
+
+- Persistent virtual filesystem
+- SSH client
+- Rootless Linux runtime
+- Git integration
+- Plugin framework
+- Desktop edition
+- Dedicated cyberdeck hardware
+
+---
+
+## Contributing
+
+Ideas, feature requests, bug reports, and pull requests are welcome.
+
+Please review the contributing guidelines before submitting changes.
 
 ---
 
 ## License
 
-License pending.
+Released under the MIT License.
+
+---
+
+## Atlas Labs
+
+Atlas Cyberdeck is developed by Atlas Labs with a focus on clean architecture, maintainable software, and long-term extensibility.
+
+---
+
+> *"Maybe not breaking free from the Matrix—but we are writing our own code instead of living inside someone else's."*

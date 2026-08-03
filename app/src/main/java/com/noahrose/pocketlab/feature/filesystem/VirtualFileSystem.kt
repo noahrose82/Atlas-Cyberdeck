@@ -3,7 +3,8 @@ package com.noahrose.pocketlab.feature.filesystem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-
+import com.noahrose.pocketlab.feature.filesystem.operations.FileOperations
+import com.noahrose.pocketlab.feature.filesystem.operations.DirectoryOperations
 object VirtualFileSystem {
 
     private val root = FileNode(
@@ -51,78 +52,32 @@ object VirtualFileSystem {
 
     fun createDirectory(name: String): Boolean {
 
-        val directoryName = name.trim()
-
-        if (directoryName.isBlank()) {
-            return false
-        }
-
-        val currentNode = _currentDirectory.value
-
-        val alreadyExists =
-            currentNode.children.any {
-                it.name.equals(
-                    directoryName,
-                    ignoreCase = true
-                )
-            }
-
-        if (alreadyExists) {
-            return false
-        }
-
-        currentNode.children.add(
-            FileNode(
-                name = directoryName,
-                isDirectory = true,
-                parent = currentNode
+        val created =
+            DirectoryOperations.createDirectory(
+                currentDirectory = _currentDirectory.value,
+                name = name
             )
-        )
 
-        refreshCurrentEntries()
+        if (created) {
+            refreshCurrentEntries()
+        }
 
-        return true
+        return created
     }
 
     fun changeDirectory(name: String): Boolean {
 
-        val destination = name.trim()
-
-        if (destination == "~") {
-            moveToDirectory(root)
-            return true
-        }
-
-        if (destination == "..") {
-
-            val parent =
-                _currentDirectory.value.parent
-
-            if (parent != null) {
-                moveToDirectory(parent)
-            }
-
-            return true
-        }
-
         val targetDirectory =
-            _currentDirectory.value.children.firstOrNull {
-                it.name.equals(
-                    destination,
-                    ignoreCase = true
-                ) &&
-                        it.isDirectory
-            }
-
-        if (targetDirectory == null) {
-            return false
-        }
+            DirectoryOperations.changeDirectory(
+                currentDirectory = _currentDirectory.value,
+                root = root,
+                name = name
+            ) ?: return false
 
         moveToDirectory(targetDirectory)
 
         return true
     }
-
     private fun moveToDirectory(directory: FileNode) {
 
         _currentDirectory.value = directory
@@ -163,54 +118,25 @@ object VirtualFileSystem {
 
     fun createFile(name: String): Boolean {
 
-        val fileName = name.trim()
-
-        if (fileName.isBlank()) {
-            return false
-        }
-
-        val currentNode = _currentDirectory.value
-
-        val alreadyExists =
-            currentNode.children.any {
-                it.name.equals(
-                    fileName,
-                    ignoreCase = true
-                )
-            }
-
-        if (alreadyExists) {
-            return false
-        }
-
-        currentNode.children.add(
-            FileNode(
-                name = fileName,
-                isDirectory = false,
-                parent = currentNode
+        val created =
+            FileOperations.createFile(
+                currentDirectory = _currentDirectory.value,
+                name = name
             )
-        )
 
-        refreshCurrentEntries()
+        if (created) {
+            refreshCurrentEntries()
+        }
 
-        return true
+        return created
     }
 
     fun readFile(name: String): String? {
 
-        val fileName = name.trim()
-
-        val file =
-            _currentDirectory.value.children.firstOrNull {
-
-                it.name.equals(
-                    fileName,
-                    ignoreCase = true
-                ) &&
-                        !it.isDirectory
-            }
-
-        return file?.content
+        return FileOperations.readFile(
+            currentDirectory = _currentDirectory.value,
+            name = name
+        )
     }
 
     fun writeFile(
@@ -218,77 +144,41 @@ object VirtualFileSystem {
         content: String
     ): Boolean {
 
-        val file =
-            _currentDirectory.value.children.firstOrNull {
-
-                it.name.equals(
-                    name.trim(),
-                    ignoreCase = true
-                ) &&
-                        !it.isDirectory
-            }
-
-        if (file == null) {
-            return false
-        }
-
-        file.content = content
-
-        return true
+        return FileOperations.writeFile(
+            currentDirectory = _currentDirectory.value,
+            name = name,
+            content = content
+        )
     }
 
     fun deleteFile(name: String): Boolean {
 
-        val fileName = name.trim()
+        val deleted =
+            FileOperations.deleteFile(
+                currentDirectory = _currentDirectory.value,
+                name = name
+            )
 
-        val file =
-            _currentDirectory.value.children.firstOrNull {
-
-                it.name.equals(
-                    fileName,
-                    ignoreCase = true
-                ) &&
-                        !it.isDirectory
-            }
-
-        if (file == null) {
-            return false
+        if (deleted) {
+            refreshCurrentEntries()
         }
 
-        _currentDirectory.value.children.remove(file)
-
-        refreshCurrentEntries()
-
-        return true
+        return deleted
     }
 
     fun deleteDirectory(name: String): Boolean {
 
-        val directoryName = name.trim()
+        val deleted =
+            DirectoryOperations.deleteDirectory(
+                currentDirectory = _currentDirectory.value,
+                name = name
+            )
 
-        val directory =
-            _currentDirectory.value.children.firstOrNull {
-
-                it.name.equals(
-                    directoryName,
-                    ignoreCase = true
-                ) &&
-                        it.isDirectory
-            }
-
-        if (directory == null) {
-            return false
+        if (deleted) {
+            refreshCurrentEntries()
         }
 
-        if (directory.children.isNotEmpty()) {
-            return false
-        }
-
-        _currentDirectory.value.children.remove(directory)
-
-        refreshCurrentEntries()
-
-        return true
+        return deleted
     }
 
     fun buildTree(): List<String> {
