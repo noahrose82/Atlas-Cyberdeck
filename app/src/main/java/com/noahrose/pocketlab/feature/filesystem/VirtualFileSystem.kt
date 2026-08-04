@@ -5,11 +5,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.noahrose.pocketlab.feature.filesystem.operations.FileOperations
 import com.noahrose.pocketlab.feature.filesystem.operations.DirectoryOperations
+import com.noahrose.pocketlab.feature.filesystem.operations.CopyMoveOperations
+import com.noahrose.pocketlab.feature.filesystem.operations.SearchOperations
+import com.noahrose.pocketlab.feature.filesystem.operations.TreeOperations
+import com.noahrose.pocketlab.feature.filesystem.persistence.PersistenceManager
 object VirtualFileSystem {
 
-    private val root = FileNode(
-        name = "~"
-    )
+    private val root =
+        PersistenceManager.load()
+            ?: FileNode(
+                name = "~"
+            )
 
     private val _currentDirectory =
         MutableStateFlow(root)
@@ -30,26 +36,32 @@ object VirtualFileSystem {
         _currentEntries.asStateFlow()
 
     init {
-        root.children.addAll(
-            listOf(
-                FileNode(
-                    name = "Documents",
-                    parent = root
-                ),
-                FileNode(
-                    name = "Downloads",
-                    parent = root
-                ),
-                FileNode(
-                    name = "Projects",
-                    parent = root
+
+        if (root.children.isEmpty()) {
+
+            root.children.addAll(
+                listOf(
+                    FileNode(
+                        name = "Documents",
+                        parent = root
+                    ),
+                    FileNode(
+                        name = "Downloads",
+                        parent = root
+                    ),
+                    FileNode(
+                        name = "Projects",
+                        parent = root
+                    )
                 )
             )
-        )
+        }
 
         refreshCurrentEntries()
     }
-
+    private fun saveFilesystem() {
+        PersistenceManager.save(root)
+    }
     fun createDirectory(name: String): Boolean {
 
         val created =
@@ -60,6 +72,7 @@ object VirtualFileSystem {
 
         if (created) {
             refreshCurrentEntries()
+            saveFilesystem()
         }
 
         return created
@@ -78,6 +91,7 @@ object VirtualFileSystem {
 
         return true
     }
+
     private fun moveToDirectory(directory: FileNode) {
 
         _currentDirectory.value = directory
@@ -144,11 +158,18 @@ object VirtualFileSystem {
         content: String
     ): Boolean {
 
-        return FileOperations.writeFile(
-            currentDirectory = _currentDirectory.value,
-            name = name,
-            content = content
-        )
+        val written =
+            FileOperations.writeFile(
+                currentDirectory = _currentDirectory.value,
+                name = name,
+                content = content
+            )
+
+        if (written) {
+            saveFilesystem()
+        }
+
+        return written
     }
 
     fun deleteFile(name: String): Boolean {
@@ -183,31 +204,17 @@ object VirtualFileSystem {
 
     fun buildTree(): List<String> {
 
-        val output = mutableListOf<String>()
-
-        output.add("${_currentDirectory.value.name}/")
-
-        buildTreeLines(
-            directory = _currentDirectory.value,
-            prefix = "",
-            output = output
+        return TreeOperations.buildTree(
+            directory = _currentDirectory.value
         )
-
-        return output
     }
 
     fun find(name: String): List<String> {
 
-        val results = mutableListOf<String>()
-
-        searchDirectory(
-            directory = root,
-            currentPath = "~",
-            target = name.trim(),
-            results = results
+        return SearchOperations.find(
+            root = root,
+            name = name
         )
-
-        return results
     }
 
     private fun buildTreeLines(
@@ -300,80 +307,18 @@ object VirtualFileSystem {
         destinationName: String
     ): Boolean {
 
-        val currentDirectory =
-            _currentDirectory.value
-
-        val source =
-            currentDirectory.children.firstOrNull {
-                it.name.equals(
-                    sourceName.trim(),
-                    ignoreCase = true
-                ) && !it.isDirectory
-            } ?: return false
-
-        val cleanDestination =
-            destinationName
-                .trim()
-                .removeSuffix("/")
-
-        val destinationDirectory =
-            currentDirectory.children.firstOrNull {
-                it.name.equals(
-                    cleanDestination,
-                    ignoreCase = true
-                ) && it.isDirectory
-            }
-
-        if (destinationDirectory != null) {
-
-            val alreadyExists =
-                destinationDirectory.children.any {
-                    it.name.equals(
-                        source.name,
-                        ignoreCase = true
-                    )
-                }
-
-            if (alreadyExists) {
-                return false
-            }
-
-            destinationDirectory.children.add(
-                FileNode(
-                    name = source.name,
-                    isDirectory = false,
-                    content = source.content,
-                    parent = destinationDirectory
-                )
+        val copied =
+            CopyMoveOperations.copyFile(
+                currentDirectory = _currentDirectory.value,
+                sourceName = sourceName,
+                destinationName = destinationName
             )
 
-            return true
+        if (copied) {
+            refreshCurrentEntries()
         }
 
-        val alreadyExists =
-            currentDirectory.children.any {
-                it.name.equals(
-                    cleanDestination,
-                    ignoreCase = true
-                )
-            }
-
-        if (alreadyExists) {
-            return false
-        }
-
-        currentDirectory.children.add(
-            FileNode(
-                name = cleanDestination,
-                isDirectory = false,
-                content = source.content,
-                parent = currentDirectory
-            )
-        )
-
-        refreshCurrentEntries()
-
-        return true
+        return copied
     }
 
     fun moveFile(
@@ -381,72 +326,17 @@ object VirtualFileSystem {
         destinationName: String
     ): Boolean {
 
-        val currentDirectory =
-            _currentDirectory.value
+        val moved =
+            CopyMoveOperations.moveFile(
+                currentDirectory = _currentDirectory.value,
+                sourceName = sourceName,
+                destinationName = destinationName
+            )
 
-        val source =
-            currentDirectory.children.firstOrNull {
-                it.name.equals(
-                    sourceName.trim(),
-                    ignoreCase = true
-                ) && !it.isDirectory
-            } ?: return false
-
-        val cleanDestination =
-            destinationName
-                .trim()
-                .removeSuffix("/")
-
-        val destinationDirectory =
-            currentDirectory.children.firstOrNull {
-                it.name.equals(
-                    cleanDestination,
-                    ignoreCase = true
-                ) && it.isDirectory
-            }
-
-        if (destinationDirectory != null) {
-
-            val alreadyExists =
-                destinationDirectory.children.any {
-                    it.name.equals(
-                        source.name,
-                        ignoreCase = true
-                    )
-                }
-
-            if (alreadyExists) {
-                return false
-            }
-
-            currentDirectory.children.remove(source)
-
-            source.parent = destinationDirectory
-
-            destinationDirectory.children.add(source)
-
+        if (moved) {
             refreshCurrentEntries()
-
-            return true
         }
 
-        val alreadyExists =
-            currentDirectory.children.any {
-                it.name.equals(
-                    cleanDestination,
-                    ignoreCase = true
-                )
-            }
-
-        if (alreadyExists) {
-            return false
-        }
-
-        source.name =
-            cleanDestination
-
-        refreshCurrentEntries()
-
-        return true
+        return moved
     }
 }
