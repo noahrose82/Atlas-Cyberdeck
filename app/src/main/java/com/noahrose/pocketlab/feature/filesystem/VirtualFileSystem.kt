@@ -20,9 +20,6 @@ object VirtualFileSystem {
     private val _currentDirectory =
         MutableStateFlow(root)
 
-    val currentDirectory: StateFlow<FileNode> =
-        _currentDirectory.asStateFlow()
-
     private val _currentPath =
         MutableStateFlow("~")
 
@@ -140,6 +137,7 @@ object VirtualFileSystem {
 
         if (created) {
             refreshCurrentEntries()
+            saveFilesystem()
         }
 
         return created
@@ -182,6 +180,7 @@ object VirtualFileSystem {
 
         if (deleted) {
             refreshCurrentEntries()
+            saveFilesystem()
         }
 
         return deleted
@@ -197,6 +196,7 @@ object VirtualFileSystem {
 
         if (deleted) {
             refreshCurrentEntries()
+            saveFilesystem()
         }
 
         return deleted
@@ -217,90 +217,7 @@ object VirtualFileSystem {
         )
     }
 
-    private fun buildTreeLines(
-        directory: FileNode,
-        prefix: String,
-        output: MutableList<String>
-    ) {
 
-        directory.children.forEachIndexed { index, child ->
-
-            val isLast =
-                index == directory.children.lastIndex
-
-            val branch =
-                if (isLast) {
-                    "└── "
-                } else {
-                    "├── "
-                }
-
-            val name =
-                if (child.isDirectory) {
-                    "${child.name}/"
-                } else {
-                    child.name
-                }
-
-            output.add(
-                prefix + branch + name
-            )
-
-            if (child.isDirectory) {
-
-                val childPrefix =
-                    prefix +
-                            if (isLast) {
-                                "    "
-                            } else {
-                                "│   "
-                            }
-
-                buildTreeLines(
-                    directory = child,
-                    prefix = childPrefix,
-                    output = output
-                )
-            }
-        }
-    }
-
-    private fun searchDirectory(
-        directory: FileNode,
-        currentPath: String,
-        target: String,
-        results: MutableList<String>
-    ) {
-
-        directory.children.forEach { child ->
-
-            val childPath =
-                if (currentPath == "~") {
-                    "~/${child.name}"
-                } else {
-                    "$currentPath/${child.name}"
-                }
-
-            if (
-                child.name.equals(
-                    target,
-                    ignoreCase = true
-                )
-            ) {
-                results.add(childPath)
-            }
-
-            if (child.isDirectory) {
-
-                searchDirectory(
-                    directory = child,
-                    currentPath = childPath,
-                    target = target,
-                    results = results
-                )
-            }
-        }
-    }
 
     fun copyFile(
         sourceName: String,
@@ -316,6 +233,7 @@ object VirtualFileSystem {
 
         if (copied) {
             refreshCurrentEntries()
+            saveFilesystem()
         }
 
         return copied
@@ -335,8 +253,9 @@ object VirtualFileSystem {
 
         if (moved) {
             refreshCurrentEntries()
+            saveFilesystem()
         }
 
         return moved
     }
-}
+    }

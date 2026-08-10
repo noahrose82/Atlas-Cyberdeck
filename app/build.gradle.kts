@@ -5,6 +5,7 @@ plugins {
 
 android {
     namespace = "com.noahrose.pocketlab"
+
     compileSdk {
         version = release(36) {
             minorApiLevel = 1
@@ -18,7 +19,8 @@ android {
         versionCode = 1
         versionName = "1.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner =
+            "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
@@ -28,39 +30,95 @@ android {
             }
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility =
+            JavaVersion.VERSION_11
+
+        targetCompatibility =
+            JavaVersion.VERSION_11
     }
+
     buildFeatures {
         compose = true
     }
 }
 
 dependencies {
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
 
+    implementation(
+        platform(
+            libs.androidx.compose.bom
+        )
+    )
 
-    implementation("androidx.navigation:navigation-compose:2.9.4")
+    implementation(
+        libs.androidx.activity.compose
+    )
 
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(
+        libs.androidx.compose.material3
+    )
 
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation(
+        libs.androidx.compose.ui
+    )
 
-    testImplementation(libs.junit)
+    implementation(
+        libs.androidx.compose.ui.graphics
+    )
 
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
+    implementation(
+        libs.androidx.compose.ui.tooling.preview
+    )
 
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(
+        "androidx.navigation:navigation-compose:2.9.4"
+    )
+
+    implementation(
+        libs.androidx.core.ktx
+    )
+
+    implementation(
+        libs.androidx.lifecycle.runtime.ktx
+    )
+
+    implementation(
+        "androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7"
+    )
+
+    implementation(
+        "androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7"
+    )
+
+    testImplementation(
+        "junit:junit:4.13.2"
+    )
+
+    androidTestImplementation(
+        platform(
+            libs.androidx.compose.bom
+        )
+    )
+
+    androidTestImplementation(
+        libs.androidx.compose.ui.test.junit4
+    )
+
+    androidTestImplementation(
+        libs.androidx.espresso.core
+    )
+
+    androidTestImplementation(
+        libs.androidx.junit
+    )
+
+    debugImplementation(
+        libs.androidx.compose.ui.test.manifest
+    )
+
+    debugImplementation(
+        libs.androidx.compose.ui.tooling
+    )
 }
