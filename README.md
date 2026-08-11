@@ -87,9 +87,9 @@ Atlas Cyberdeck is built with modern Android development practices and designed 
 
 ## Project Status
 
-Current milestone:
+_Current milestone:_
 
-**v0.9.0-alpha**
+**v0.13.0-alpha — Foundation**
 
 Current focus:
 

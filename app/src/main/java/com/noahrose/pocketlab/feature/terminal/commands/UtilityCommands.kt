@@ -5,6 +5,9 @@ import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.registry.CommandRegistry
 import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
 import com.noahrose.pocketlab.feature.terminal.script.ScriptEngine
+import com.noahrose.pocketlab.feature.terminal.plugin.PluginRegistry
+import com.noahrose.pocketlab.feature.system.VersionInfo
+import com.noahrose.pocketlab.feature.terminal.handler.HandlerRegistry
 object UtilityCommands : CommandHandler {
 
     override fun handle(
@@ -99,6 +102,64 @@ object UtilityCommands : CommandHandler {
                 return true
             }
 
+            "plugins" -> {
+
+                output.add("Installed Plugins")
+                output.add("")
+
+                PluginRegistry
+                    .getAll()
+                    .forEach { plugin ->
+
+                        output.add(plugin.info.name)
+                        output.add("Version : ${plugin.info.version}")
+                        output.add("Author  : ${plugin.info.author}")
+                        output.add("Description : ${plugin.info.description}")
+                        output.add("")
+                    }
+
+                return true
+            }
+
+            "version" -> {
+
+                output.add(VersionInfo.NAME)
+                output.add("Version  : ${VersionInfo.VERSION}")
+                output.add("Build    : ${VersionInfo.BUILD}")
+                output.add("Codename : ${VersionInfo.CODENAME}")
+                output.add("Author   : ${VersionInfo.AUTHOR}")
+
+                return true
+            }
+
+            "diagnostics" -> {
+
+                val commandCount =
+                    CommandRegistry.getAll().size
+
+                val handlerCount =
+                    HandlerRegistry.getAll().size
+
+                val pluginCount =
+                    PluginRegistry.getAll().size
+
+                output.add("Atlas Cyberdeck Diagnostics")
+                output.add("")
+                output.add("Version          : ${VersionInfo.VERSION}")
+                output.add("Filesystem       : ONLINE")
+                output.add("Command Registry : ONLINE")
+                output.add("Handlers         : ONLINE")
+                output.add("Plugins          : ONLINE")
+                output.add("")
+                output.add("Commands         : $commandCount")
+                output.add("Handlers         : $handlerCount")
+                output.add("Plugins          : $pluginCount")
+                output.add("")
+                output.add("Overall Status   : HEALTHY")
+
+                return true
+            }
+
             "history" -> {
 
                 val history =
@@ -165,19 +226,19 @@ object UtilityCommands : CommandHandler {
             "neofetch" -> {
 
                 output.add(
-                    "Atlas Cyberdeck v0.14.0-alpha"
+                    "${VersionInfo.NAME} ${VersionInfo.VERSION}"
                 )
+
                 output.add(
-                    "OS      : Atlas Linux"
+                    "Build   : ${VersionInfo.BUILD}"
                 )
+
                 output.add(
-                    "Kernel  : 6.1"
+                    "Codename: ${VersionInfo.CODENAME}"
                 )
+
                 output.add(
-                    "Shell   : Atlas Terminal"
-                )
-                output.add(
-                    "User    : atlas"
+                    "Author  : ${VersionInfo.AUTHOR}"
                 )
 
                 return true
