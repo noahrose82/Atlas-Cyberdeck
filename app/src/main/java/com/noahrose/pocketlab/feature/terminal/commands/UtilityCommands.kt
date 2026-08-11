@@ -2,6 +2,7 @@ package com.noahrose.pocketlab.feature.terminal.commands
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
+import com.noahrose.pocketlab.feature.terminal.registry.CommandRegistry
 
 object UtilityCommands {
 
@@ -16,33 +17,30 @@ object UtilityCommands {
 
                 output.add("Available commands:")
                 output.add("")
-                output.add("tree")
-                output.add("help")
-                output.add("history")
-                output.add("!!")
-                output.add("!<number>")
-                output.add("cp")
-                output.add("mv")
-                output.add("find")
-                output.add("clear")
-                output.add("whoami")
-                output.add("pwd")
-                output.add("ls")
-                output.add("grep")
-                output.add("head")
-                output.add("tail")
-                output.add("mkdir")
-                output.add("touch")
-                output.add("cat")
-                output.add("echo")
-                output.add("rmdir")
-                output.add("rm")
-                output.add("status")
-                output.add("neofetch")
+
+                CommandRegistry
+                    .getAll()
+                    .groupBy { command ->
+                        command.category
+                    }
+                    .toSortedMap()
+                    .forEach { (category, commands) ->
+
+                        output.add(category)
+                        output.add("-".repeat(category.length))
+
+                        commands.forEach { command ->
+
+                            output.add(
+                                "${command.name} - ${command.description}"
+                            )
+                        }
+
+                        output.add("")
+                    }
 
                 return true
             }
-
 
             "history" -> {
 
@@ -85,10 +83,13 @@ object UtilityCommands {
             "pwd" -> {
 
                 output.add(
-                    VirtualFileSystem.currentPath.value.replace(
-                        "~",
-                        "/home/atlas"
-                    )
+                    VirtualFileSystem
+                        .currentPath
+                        .value
+                        .replace(
+                            "~",
+                            "/home/atlas"
+                        )
                 )
 
                 return true
@@ -106,11 +107,21 @@ object UtilityCommands {
 
             "neofetch" -> {
 
-                output.add("Atlas Cyberdeck v0.10.0-alpha")
-                output.add("OS      : Atlas Linux")
-                output.add("Kernel  : 6.1")
-                output.add("Shell   : Atlas Terminal")
-                output.add("User    : atlas")
+                output.add(
+                    "Atlas Cyberdeck v0.14.0-alpha"
+                )
+                output.add(
+                    "OS      : Atlas Linux"
+                )
+                output.add(
+                    "Kernel  : 6.1"
+                )
+                output.add(
+                    "Shell   : Atlas Terminal"
+                )
+                output.add(
+                    "User    : atlas"
+                )
 
                 return true
             }

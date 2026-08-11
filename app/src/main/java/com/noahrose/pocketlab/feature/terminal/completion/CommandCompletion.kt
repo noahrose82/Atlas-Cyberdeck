@@ -1,34 +1,8 @@
 package com.noahrose.pocketlab.feature.terminal.completion
 
+import com.noahrose.pocketlab.feature.terminal.registry.CommandRegistry
+
 object CommandCompletion {
-
-    private val commands =
-        listOf(
-
-            "help",
-            "history",
-            "clear",
-            "whoami",
-            "pwd",
-            "ls",
-            "tree",
-            "find",
-            "cp",
-            "mv",
-            "grep",
-            "head",
-            "tail",
-            "mkdir",
-            "touch",
-            "cat",
-            "echo",
-            "rm",
-            "rmdir",
-            "cd",
-            "status",
-            "neofetch"
-
-        )
 
     fun complete(
         input: String
@@ -42,13 +16,18 @@ object CommandCompletion {
         }
 
         val matches =
-            commands.filter {
+            CommandRegistry
+                .getAll()
+                .map { command ->
+                    command.name
+                }
+                .filter { commandName ->
 
-                it.startsWith(
-                    prefix,
-                    ignoreCase = true
-                )
-            }
+                    commandName.startsWith(
+                        prefix,
+                        ignoreCase = true
+                    )
+                }
 
         return when {
 
