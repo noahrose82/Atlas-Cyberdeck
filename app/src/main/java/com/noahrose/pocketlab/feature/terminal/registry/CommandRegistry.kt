@@ -211,7 +211,15 @@ object CommandRegistry {
                     description = "Display the current terminal user",
                     usage = "whoami",
                     category = "Utility"
-                )
+                ),
+
+                        CommandInfo(
+                        name = "runscript",
+                description = "Execute an Atlas shell script",
+                usage = "runscript <script>",
+                category = "System"
+            ),
+
             )
 
         builtIns.forEach { command ->

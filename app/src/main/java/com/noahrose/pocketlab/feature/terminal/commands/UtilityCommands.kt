@@ -4,6 +4,7 @@ import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.registry.CommandRegistry
 import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
+import com.noahrose.pocketlab.feature.terminal.script.ScriptEngine
 object UtilityCommands : CommandHandler {
 
     override fun handle(
@@ -39,6 +40,61 @@ object UtilityCommands : CommandHandler {
 
                         output.add("")
                     }
+
+                return true
+            }
+
+            "runscript" -> {
+
+                if (
+                    parts.size < 2 ||
+                    parts[1].isBlank()
+                ) {
+                    output.add(
+                        "Usage: runscript <script.ash>"
+                    )
+
+                    return true
+                }
+
+                val scriptName =
+                    parts[1].trim()
+
+                if (
+                    !scriptName.endsWith(
+                        ".ash",
+                        ignoreCase = true
+                    )
+                ) {
+                    output.add(
+                        "runscript: '$scriptName': Expected an .ash script"
+                    )
+
+                    return true
+                }
+
+                val scriptContent =
+                    VirtualFileSystem.readFile(
+                        scriptName
+                    )
+
+                if (scriptContent == null) {
+
+                    output.add(
+                        "runscript: '$scriptName': Script not found"
+                    )
+
+                    return true
+                }
+
+                output.add(
+                    "Executing script: $scriptName"
+                )
+
+                ScriptEngine.execute(
+                    script = scriptContent.lines(),
+                    output = output
+                )
 
                 return true
             }
