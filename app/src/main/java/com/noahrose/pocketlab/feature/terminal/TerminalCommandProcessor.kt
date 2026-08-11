@@ -2,10 +2,7 @@ package com.noahrose.pocketlab.feature.terminal
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.alias.CommandAliases
-import com.noahrose.pocketlab.feature.terminal.commands.DirectoryCommands
-import com.noahrose.pocketlab.feature.terminal.commands.FileCommands
-import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
-import com.noahrose.pocketlab.feature.terminal.commands.UtilityCommands
+import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.pipe.PipeEngine
@@ -61,8 +58,8 @@ object TerminalCommandProcessor {
             parts[0].lowercase()
 
         /*
-         * Pipe execution is handled before normal
-         * command dispatch.
+         * Pipe execution is handled before
+         * normal command dispatch.
          */
         if (
             PipeEngine.handle(
@@ -74,22 +71,11 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Utility commands.
+         * Normal commands are delegated to
+         * the centralized command dispatcher.
          */
         if (
-            UtilityCommands.handle(
-                commandName = commandName,
-                output = output
-            )
-        ) {
-            return
-        }
-
-        /*
-         * File commands.
-         */
-        if (
-            FileCommands.handle(
+            CommandDispatcher.dispatch(
                 commandName = commandName,
                 parts = parts,
                 output = output
@@ -99,34 +85,8 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Directory commands.
-         */
-        if (
-            DirectoryCommands.handle(
-                commandName = commandName,
-                parts = parts,
-                output = output
-            )
-        ) {
-            return
-        }
-
-        /*
-         * Text-processing commands.
-         */
-        if (
-            TextCommands.handle(
-                commandName = commandName,
-                parts = parts,
-                output = output
-            )
-        ) {
-            return
-        }
-
-        /*
-         * History expansion commands remain here
-         * because they recursively invoke process().
+         * History expansion remains here because
+         * these commands recursively invoke process().
          */
         when {
 
@@ -162,7 +122,6 @@ object TerminalCommandProcessor {
              * or command prefix.
              *
              * Examples:
-             *
              * !2
              * !mkdir
              */
