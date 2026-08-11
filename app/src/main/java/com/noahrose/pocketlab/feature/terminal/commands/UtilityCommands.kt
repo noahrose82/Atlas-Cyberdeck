@@ -3,11 +3,12 @@ package com.noahrose.pocketlab.feature.terminal.commands
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.registry.CommandRegistry
+import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
+object UtilityCommands : CommandHandler {
 
-object UtilityCommands {
-
-    fun handle(
+    override fun handle(
         commandName: String,
+        parts: List<String>,
         output: MutableList<String>
     ): Boolean {
 

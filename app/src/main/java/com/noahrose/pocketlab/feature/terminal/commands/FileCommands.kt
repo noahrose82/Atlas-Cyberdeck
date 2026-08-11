@@ -1,10 +1,10 @@
 package com.noahrose.pocketlab.feature.terminal.commands
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
+import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
+object FileCommands : CommandHandler {
 
-object FileCommands {
-
-    fun handle(
+    override fun handle(
         commandName: String,
         parts: List<String>,
         output: MutableList<String>
