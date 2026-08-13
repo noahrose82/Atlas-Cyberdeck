@@ -2,7 +2,6 @@ package com.noahrose.pocketlab.feature.terminal
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.alias.CommandAliases
-import com.noahrose.pocketlab.feature.terminal.chaining.CommandChainEngine
 import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
 import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
@@ -13,6 +12,7 @@ import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionEngine
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionParser
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionType
 import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
+import com.noahrose.pocketlab.feature.terminal.chaining.ConditionalChainEngine
 
 object TerminalCommandProcessor {
 
@@ -35,24 +35,38 @@ object TerminalCommandProcessor {
                 )
             )
 
-        /*
-         * History expansion commands are not stored directly.
-         *
-         * Examples:
-         *
-         * !!
-         * !2
-         * !mkdir
-         */
-        if (
-            recordHistory &&
-            !trimmedCommand.startsWith("!")
-        ) {
+ /*
+ /*
+ * Conditional command chaining.
+ *
+ * Examples:
+ *
+ * commandA && commandB
+ * commandA || commandB
+ * commandA || commandB && commandC
+ *
+ * && executes the next command when the
+ * previous command succeeds.
+ *
+ * || executes the next command when the
+ * previous command fails.
+ */
+ */
 
-            CommandHistory.add(
-                trimmedCommand
-            )
-        }
+if (
+    ConditionalChainEngine.execute(
+        command = expandedCommand
+    ) { chainedCommand ->
+
+        process(
+            command = chainedCommand,
+            output = output,
+            recordHistory = false
+        )
+    }
+) {
+    return
+}
 
         /*
          * Display the shell prompt for normal
@@ -61,6 +75,7 @@ object TerminalCommandProcessor {
          * Internal command execution can disable
          * prompt rendering.
          */
+
         if (showPrompt) {
 
             val currentPath =
@@ -82,42 +97,15 @@ object TerminalCommandProcessor {
          * Individual handlers may replace this
          * with a non-zero exit code if execution fails.
          */
+
         ExecutionStatus.set(0)
 
-        /*
-         * Command chaining.
-         *
-         * Example:
-         *
-         * mkdir Area51 && cd Area51 && touch classified.txt
-         *
-         * Each chained command is passed back through
-         * the normal command processor so shell features
-         * such as redirection and expansion still work.
-         *
-         * CommandChainEngine checks ExecutionStatus
-         * after each command and stops the chain when
-         * a command reports failure.
-         */
-        if (
-            CommandChainEngine.execute(
-                command = expandedCommand
-            ) { chainedCommand ->
-
-                process(
-                    command = chainedCommand,
-                    output = output,
-                    recordHistory = false
-                )
-            }
-        ) {
-            return
-        }
 
         /*
          * Detect shell redirection before normal
          * command parsing and dispatch.
          */
+
         val redirection =
             RedirectionParser.parse(
                 expandedCommand
@@ -135,6 +123,7 @@ object TerminalCommandProcessor {
          * silently and its output is written into
          * the target file.
          */
+
         if (
             redirection != null &&
             (
@@ -180,6 +169,7 @@ object TerminalCommandProcessor {
          * File contents are passed directly to
          * text-processing commands as input.
          */
+
         if (
             redirection != null &&
             redirection.type ==
@@ -233,6 +223,7 @@ object TerminalCommandProcessor {
         /*
          * Normal command parsing.
          */
+
         val parts =
             expandedCommand.split(
                 Regex("\\s+"),
@@ -246,6 +237,7 @@ object TerminalCommandProcessor {
          * Pipe execution is handled before
          * normal command dispatch.
          */
+
         if (
             PipeEngine.handle(
                 command = expandedCommand,
@@ -259,6 +251,7 @@ object TerminalCommandProcessor {
          * Normal commands are delegated to the
          * centralized command dispatcher.
          */
+
         if (
             CommandDispatcher.dispatch(
                 commandName = commandName,
@@ -273,11 +266,13 @@ object TerminalCommandProcessor {
          * History expansion remains here because
          * these commands recursively invoke process().
          */
+
         when {
 
             /*
              * Repeat the most recent command.
              */
+
             commandName == "!!" -> {
 
                 val lastCommand =
@@ -313,6 +308,7 @@ object TerminalCommandProcessor {
              * !2
              * !mkdir
              */
+
             commandName.startsWith("!") -> {
 
                 val historyReference =
@@ -395,6 +391,7 @@ object TerminalCommandProcessor {
              * Exit code 127 is the conventional
              * shell code for "command not found."
              */
+
             else -> {
 
                 ExecutionStatus.set(127)
