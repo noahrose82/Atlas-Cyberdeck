@@ -2,67 +2,88 @@ package com.noahrose.pocketlab.feature.terminal.commands
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
+
 object TextCommands : CommandHandler {
 
+    /*
+     * Your EXISTING handle() function stays here.
+     *
+     * Do not replace it.
+     */
     override fun handle(
         commandName: String,
         parts: List<String>,
         output: MutableList<String>
     ): Boolean {
 
-        when (commandName) {
+        // KEEP YOUR EXISTING:
+        // grep
+        // head
+        // tail
+        // sort
+        // uniq
+        // wc
+        //
+        // implementation here.
+
+        return false
+    }
+
+    /*
+     * Handles text supplied through stdin-style
+     * input redirection.
+     *
+     * Examples:
+     *
+     * sort < names.txt
+     * uniq < names.txt
+     * wc < names.txt
+     */
+    fun handleInput(
+        commandName: String,
+        input: List<String>,
+        output: MutableList<String>
+    ): Boolean {
+
+        return when (commandName) {
+
+            "sort" -> {
+
+                input
+                    .sorted()
+                    .forEach(output::add)
+
+                true
+            }
+
+            "uniq" -> {
+
+                input
+                    .distinct()
+                    .forEach(output::add)
+
+                true
+            }
 
             "wc" -> {
 
-                if (
-                    parts.size < 2 ||
-                    parts[1].isBlank()
-                ) {
-
-                    output.add(
-                        "Usage: wc <filename>"
-                    )
-
-                    return true
-                }
-
-                val fileName =
-                    parts[1].trim()
-
-                val content =
-                    VirtualFileSystem.readFile(
-                        fileName
-                    )
-
-                if (content == null) {
-
-                    output.add(
-                        "wc: $fileName: No such file"
-                    )
-
-                    return true
-                }
+                val text =
+                    input.joinToString("\n")
 
                 val lines =
-                    if (content.isEmpty()) {
-                        0
-                    } else {
-                        content.lines().size
-                    }
+                    input.size
 
                 val words =
-                    content
+                    text
                         .trim()
-                        .split(
-                            Regex("\\s+")
-                        )
+                        .split(Regex("\\s+"))
                         .filter {
                             it.isNotBlank()
                         }
                         .size
 
                 val characters =
-                    content.length
+                    text.length
 
                 output.add(
                     "Lines      : $lines"
@@ -76,94 +97,10 @@ object TextCommands : CommandHandler {
                     "Characters : $characters"
                 )
 
-                return true
+                true
             }
 
-            "sort" -> {
-
-                if (
-                    parts.size < 2 ||
-                    parts[1].isBlank()
-                ) {
-
-                    output.add(
-                        "Usage: sort <filename>"
-                    )
-
-                    return true
-                }
-
-                val fileName =
-                    parts[1].trim()
-
-                val content =
-                    VirtualFileSystem.readFile(
-                        fileName
-                    )
-
-                if (content == null) {
-
-                    output.add(
-                        "sort: $fileName: No such file"
-                    )
-
-                    return true
-                }
-
-                content
-                    .lines()
-                    .sorted()
-                    .forEach { line ->
-
-                        output.add(line)
-                    }
-
-                return true
-            }
-
-            "uniq" -> {
-
-                if (
-                    parts.size < 2 ||
-                    parts[1].isBlank()
-                ) {
-
-                    output.add(
-                        "Usage: uniq <filename>"
-                    )
-
-                    return true
-                }
-
-                val fileName =
-                    parts[1].trim()
-
-                val content =
-                    VirtualFileSystem.readFile(
-                        fileName
-                    )
-
-                if (content == null) {
-
-                    output.add(
-                        "uniq: $fileName: No such file"
-                    )
-
-                    return true
-                }
-
-                content
-                    .lines()
-                    .distinct()
-                    .forEach { line ->
-
-                        output.add(line)
-                    }
-
-                return true
-            }
-        }
-            return false
-
+            else -> false
         }
     }
+}

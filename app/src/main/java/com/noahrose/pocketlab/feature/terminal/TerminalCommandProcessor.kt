@@ -2,21 +2,29 @@ package com.noahrose.pocketlab.feature.terminal
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.alias.CommandAliases
+import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
 import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.pipe.PipeEngine
+import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionEngine
+import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionParser
+import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionType
 import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
 
 object TerminalCommandProcessor {
 
     fun process(
         command: String,
-        output: MutableList<String>
+        output: MutableList<String>,
+        recordHistory: Boolean = true,
+        showPrompt: Boolean = true
     ) {
 
         val trimmedCommand =
-            CommandAliases.resolve(command).trim()
+            CommandAliases
+                .resolve(command)
+                .trim()
 
         val expandedCommand =
             WildcardExpander.expand(
@@ -29,25 +37,153 @@ object TerminalCommandProcessor {
          * History expansion commands are not stored directly.
          *
          * Examples:
+         *
          * !!
          * !2
          * !mkdir
          */
-        if (!trimmedCommand.startsWith("!")) {
-            CommandHistory.add(trimmedCommand)
+        if (
+            recordHistory &&
+            !trimmedCommand.startsWith("!")
+        ) {
+
+            CommandHistory.add(
+                trimmedCommand
+            )
         }
 
-        val currentPath =
-            VirtualFileSystem.currentPath.value
+        /*
+         * Display the shell prompt for normal
+         * user-entered commands.
+         *
+         * Internal command execution can disable
+         * prompt rendering.
+         */
+        if (showPrompt) {
 
-        output.add(
-            "atlas@cyberdeck:$currentPath$ $trimmedCommand"
-        )
+            val currentPath =
+                VirtualFileSystem.currentPath.value
+
+            output.add(
+                "atlas@cyberdeck:$currentPath$ $trimmedCommand"
+            )
+        }
 
         if (trimmedCommand.isBlank()) {
             return
         }
 
+        /*
+         * Detect shell redirection before normal
+         * command parsing and dispatch.
+         */
+        val redirection =
+            RedirectionParser.parse(
+                expandedCommand
+            )
+
+        /*
+         * Output redirection.
+         *
+         * Examples:
+         *
+         * echo Area51 > alien.txt
+         * echo Classified >> alien.txt
+         *
+         * The command on the left is executed
+         * silently and its output is written
+         * to the target file.
+         */
+        if (
+            redirection != null &&
+            (
+                    redirection.type ==
+                            RedirectionType.OVERWRITE ||
+                            redirection.type ==
+                            RedirectionType.APPEND
+                    )
+        ) {
+
+            val redirectedOutput =
+                mutableListOf<String>()
+
+            process(
+                command = redirection.command,
+                output = redirectedOutput,
+                recordHistory = false,
+                showPrompt = false
+            )
+
+            RedirectionEngine.handle(
+                command = expandedCommand,
+                commandOutput = redirectedOutput
+            )
+
+            return
+        }
+
+        /*
+         * Input redirection.
+         *
+         * Examples:
+         *
+         * sort < names.txt
+         * uniq < names.txt
+         * wc < names.txt
+         *
+         * The contents of the file are passed
+         * directly into text commands rather than
+         * being converted into command arguments.
+         */
+        if (
+            redirection != null &&
+            redirection.type ==
+            RedirectionType.INPUT
+        ) {
+
+            val inputContent =
+                VirtualFileSystem.readFile(
+                    redirection.target
+                )
+
+            if (inputContent == null) {
+
+                output.add(
+                    "${redirection.target}: No such file"
+                )
+
+                return
+            }
+
+            val inputParts =
+                redirection.command.split(
+                    Regex("\\s+"),
+                    limit = 2
+                )
+
+            val inputCommandName =
+                inputParts[0].lowercase()
+
+            val handled =
+                TextCommands.handleInput(
+                    commandName = inputCommandName,
+                    input = inputContent.lines(),
+                    output = output
+                )
+
+            if (!handled) {
+
+                output.add(
+                    "Input redirection is not supported for: $inputCommandName"
+                )
+            }
+
+            return
+        }
+
+        /*
+         * Normal command parsing.
+         */
         val parts =
             expandedCommand.split(
                 Regex("\\s+"),
@@ -86,7 +222,8 @@ object TerminalCommandProcessor {
 
         /*
          * History expansion remains here because
-         * these commands recursively invoke process().
+         * these commands recursively invoke
+         * the command processor.
          */
         when {
 
@@ -122,6 +259,7 @@ object TerminalCommandProcessor {
              * or command prefix.
              *
              * Examples:
+             *
              * !2
              * !mkdir
              */
@@ -170,9 +308,10 @@ object TerminalCommandProcessor {
                 } else {
 
                     val historyCommand =
-                        CommandHistory.findLastStartingWith(
-                            historyReference
-                        )
+                        CommandHistory
+                            .findLastStartingWith(
+                                historyReference
+                            )
 
                     if (historyCommand == null) {
 
@@ -194,6 +333,9 @@ object TerminalCommandProcessor {
                 }
             }
 
+            /*
+             * Unknown command.
+             */
             else -> {
 
                 output.add(
