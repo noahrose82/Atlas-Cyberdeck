@@ -1,7 +1,9 @@
 package com.noahrose.pocketlab.feature.terminal.commands
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
+import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
 import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
+
 object FileCommands : CommandHandler {
 
     override fun handle(
@@ -18,6 +20,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: touch <filename>"
                     )
@@ -34,10 +39,17 @@ object FileCommands : CommandHandler {
                     )
 
                 if (created) {
+
+                    ExecutionStatus.set(0)
+
                     output.add(
                         "File created: $fileName"
                     )
+
                 } else {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "touch: '$fileName' already exists"
                     )
@@ -52,6 +64,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: cat <filename>"
                     )
@@ -66,6 +81,8 @@ object FileCommands : CommandHandler {
                             Regex("\\s+")
                         )
 
+                var failed = false
+
                 fileNames.forEachIndexed { index, fileName ->
 
                     val content =
@@ -75,6 +92,8 @@ object FileCommands : CommandHandler {
 
                     if (content == null) {
 
+                        failed = true
+
                         output.add(
                             "cat: $fileName: No such file"
                         )
@@ -82,14 +101,18 @@ object FileCommands : CommandHandler {
                     } else {
 
                         if (fileNames.size > 1) {
+
                             output.add(
                                 "----- $fileName -----"
                             )
                         }
 
                         if (content.isEmpty()) {
+
                             output.add("<empty>")
+
                         } else {
+
                             output.add(content)
                         }
 
@@ -97,10 +120,15 @@ object FileCommands : CommandHandler {
                             fileNames.size > 1 &&
                             index != fileNames.lastIndex
                         ) {
+
                             output.add("")
                         }
                     }
                 }
+
+                ExecutionStatus.set(
+                    if (failed) 1 else 0
+                )
 
                 return true
             }
@@ -114,6 +142,8 @@ object FileCommands : CommandHandler {
                         parts[1].trim()
                     }
 
+                ExecutionStatus.set(0)
+
                 output.add(input)
 
                 return true
@@ -125,6 +155,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: rm <filename>"
                     )
@@ -140,6 +173,7 @@ object FileCommands : CommandHandler {
                         )
 
                 var deletedCount = 0
+                var failed = false
 
                 fileNames.forEach { fileName ->
 
@@ -149,12 +183,17 @@ object FileCommands : CommandHandler {
                         )
 
                     if (deleted) {
+
+                        deletedCount++
+
                         output.add(
                             "Deleted: $fileName"
                         )
 
-                        deletedCount++
                     } else {
+
+                        failed = true
+
                         output.add(
                             "rm: $fileName: No such file"
                         )
@@ -162,10 +201,15 @@ object FileCommands : CommandHandler {
                 }
 
                 if (deletedCount == 0) {
+
                     output.add(
                         "No files were deleted."
                     )
                 }
+
+                ExecutionStatus.set(
+                    if (failed) 1 else 0
+                )
 
                 return true
             }
@@ -176,6 +220,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: cp <source...> <destination>"
                     )
@@ -191,6 +238,8 @@ object FileCommands : CommandHandler {
                         )
 
                 if (arguments.size < 2) {
+
+                    ExecutionStatus.set(1)
 
                     output.add(
                         "Usage: cp <source...> <destination>"
@@ -206,6 +255,7 @@ object FileCommands : CommandHandler {
                     arguments.dropLast(1)
 
                 var copiedCount = 0
+                var failed = false
 
                 sources.forEach { source ->
 
@@ -216,12 +266,17 @@ object FileCommands : CommandHandler {
                         )
 
                     if (copied) {
+
                         copiedCount++
 
                         output.add(
                             "Copied '$source' to '$destination'"
                         )
+
                     } else {
+
+                        failed = true
+
                         output.add(
                             "cp: failed to copy '$source'"
                         )
@@ -229,10 +284,15 @@ object FileCommands : CommandHandler {
                 }
 
                 if (copiedCount == 0) {
+
                     output.add(
                         "cp: no files copied"
                     )
                 }
+
+                ExecutionStatus.set(
+                    if (failed) 1 else 0
+                )
 
                 return true
             }
@@ -243,6 +303,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: mv <source...> <destination>"
                     )
@@ -259,6 +322,8 @@ object FileCommands : CommandHandler {
 
                 if (arguments.size < 2) {
 
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: mv <source...> <destination>"
                     )
@@ -273,6 +338,7 @@ object FileCommands : CommandHandler {
                     arguments.dropLast(1)
 
                 var movedCount = 0
+                var failed = false
 
                 sources.forEach { source ->
 
@@ -283,12 +349,17 @@ object FileCommands : CommandHandler {
                         )
 
                     if (moved) {
+
                         movedCount++
 
                         output.add(
                             "Moved '$source' to '$destination'"
                         )
+
                     } else {
+
+                        failed = true
+
                         output.add(
                             "mv: failed to move '$source'"
                         )
@@ -296,10 +367,15 @@ object FileCommands : CommandHandler {
                 }
 
                 if (movedCount == 0) {
+
                     output.add(
                         "mv: no files moved"
                     )
                 }
+
+                ExecutionStatus.set(
+                    if (failed) 1 else 0
+                )
 
                 return true
             }
@@ -310,6 +386,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: grep <text> <filename>"
                     )
@@ -326,6 +405,8 @@ object FileCommands : CommandHandler {
                         )
 
                 if (arguments.size < 2) {
+
+                    ExecutionStatus.set(1)
 
                     output.add(
                         "Usage: grep <text> <filename>"
@@ -347,6 +428,8 @@ object FileCommands : CommandHandler {
 
                 if (content == null) {
 
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "grep: $fileName: No such file"
                     )
@@ -361,10 +444,17 @@ object FileCommands : CommandHandler {
                             }
 
                     if (matches.isEmpty()) {
+
+                        ExecutionStatus.set(1)
+
                         output.add(
                             "No matches found."
                         )
+
                     } else {
+
+                        ExecutionStatus.set(0)
+
                         matches.forEach { line ->
                             output.add(line)
                         }
@@ -380,6 +470,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: head <filename>"
                     )
@@ -397,11 +490,15 @@ object FileCommands : CommandHandler {
 
                 if (content == null) {
 
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "head: $fileName: No such file"
                     )
 
                 } else {
+
+                    ExecutionStatus.set(0)
 
                     content
                         .lines()
@@ -420,6 +517,9 @@ object FileCommands : CommandHandler {
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: tail <filename>"
                     )
@@ -437,11 +537,15 @@ object FileCommands : CommandHandler {
 
                 if (content == null) {
 
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "tail: $fileName: No such file"
                     )
 
                 } else {
+
+                    ExecutionStatus.set(0)
 
                     content
                         .lines()

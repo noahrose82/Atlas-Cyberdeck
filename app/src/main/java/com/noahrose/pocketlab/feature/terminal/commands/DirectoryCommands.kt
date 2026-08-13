@@ -1,11 +1,12 @@
 package com.noahrose.pocketlab.feature.terminal.commands
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
+import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
 import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
 
 object DirectoryCommands : CommandHandler {
 
-override fun handle(
+    override fun handle(
         commandName: String,
         parts: List<String>,
         output: MutableList<String>
@@ -23,6 +24,8 @@ override fun handle(
                     parts[1].isBlank()
                 ) {
 
+                    ExecutionStatus.set(0)
+
                     if (entries.isEmpty()) {
 
                         output.add("<empty>")
@@ -32,10 +35,11 @@ override fun handle(
                         entries.forEach { entry ->
 
                             output.add(
-                                if (entry.isDirectory)
+                                if (entry.isDirectory) {
                                     "${entry.name}/"
-                                else
+                                } else {
                                     entry.name
+                                }
                             )
                         }
                     }
@@ -45,17 +49,25 @@ override fun handle(
                     val requestedNames =
                         parts[1]
                             .trim()
-                            .split(Regex("\\s+"))
+                            .split(
+                                Regex("\\s+")
+                            )
 
                     val matchingEntries =
                         requestedNames.mapNotNull { requestedName ->
 
-                            entries.find {
-                                it.name == requestedName
+                            entries.find { entry ->
+
+                                entry.name.equals(
+                                    requestedName,
+                                    ignoreCase = true
+                                )
                             }
                         }
 
                     if (matchingEntries.isEmpty()) {
+
+                        ExecutionStatus.set(1)
 
                         output.add(
                             "ls: no matching files found"
@@ -63,13 +75,16 @@ override fun handle(
 
                     } else {
 
+                        ExecutionStatus.set(0)
+
                         matchingEntries.forEach { entry ->
 
                             output.add(
-                                if (entry.isDirectory)
+                                if (entry.isDirectory) {
                                     "${entry.name}/"
-                                else
+                                } else {
                                     entry.name
+                                }
                             )
                         }
                     }
@@ -80,9 +95,13 @@ override fun handle(
 
             "tree" -> {
 
+                ExecutionStatus.set(0)
+
                 VirtualFileSystem
                     .buildTree()
-                    .forEach(output::add)
+                    .forEach(
+                        output::add
+                    )
 
                 return true
             }
@@ -93,6 +112,8 @@ override fun handle(
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
 
                     output.add(
                         "Usage: find <name>"
@@ -110,13 +131,19 @@ override fun handle(
 
                     if (results.isEmpty()) {
 
+                        ExecutionStatus.set(1)
+
                         output.add(
                             "find: '$target': No matches found"
                         )
 
                     } else {
 
-                        results.forEach(output::add)
+                        ExecutionStatus.set(0)
+
+                        results.forEach(
+                            output::add
+                        )
                     }
                 }
 
@@ -129,6 +156,8 @@ override fun handle(
                     parts.size < 2 ||
                     parts[1].isBlank()
                 ) {
+
+                    ExecutionStatus.set(1)
 
                     output.add(
                         "Usage: mkdir <directory>"
@@ -146,11 +175,15 @@ override fun handle(
 
                     if (created) {
 
+                        ExecutionStatus.set(0)
+
                         output.add(
                             "Directory created: $directory"
                         )
 
                     } else {
+
+                        ExecutionStatus.set(1)
 
                         output.add(
                             "mkdir: '$directory' already exists"
@@ -168,6 +201,8 @@ override fun handle(
                     parts[1].isBlank()
                 ) {
 
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: cd <directory>"
                     )
@@ -182,7 +217,13 @@ override fun handle(
                             destination
                         )
 
-                    if (!changed) {
+                    if (changed) {
+
+                        ExecutionStatus.set(0)
+
+                    } else {
+
+                        ExecutionStatus.set(1)
 
                         output.add(
                             "cd: $destination: No such directory"
@@ -200,6 +241,8 @@ override fun handle(
                     parts[1].isBlank()
                 ) {
 
+                    ExecutionStatus.set(1)
+
                     output.add(
                         "Usage: rmdir <directory>"
                     )
@@ -216,11 +259,15 @@ override fun handle(
 
                     if (deleted) {
 
+                        ExecutionStatus.set(0)
+
                         output.add(
                             "Directory removed: $directory"
                         )
 
                     } else {
+
+                        ExecutionStatus.set(1)
 
                         output.add(
                             "rmdir: failed to remove '$directory'"

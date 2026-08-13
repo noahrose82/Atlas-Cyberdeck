@@ -6,6 +6,7 @@ import com.noahrose.pocketlab.feature.terminal.chaining.CommandChainEngine
 import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
 import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
+import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.pipe.PipeEngine
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionEngine
@@ -75,15 +76,28 @@ object TerminalCommandProcessor {
         }
 
         /*
+         * Every command begins with a successful
+         * execution status.
+         *
+         * Individual handlers may replace this
+         * with a non-zero exit code if execution fails.
+         */
+        ExecutionStatus.set(0)
+
+        /*
          * Command chaining.
          *
          * Example:
          *
          * mkdir Area51 && cd Area51 && touch classified.txt
          *
-         * Each command is sent back through the normal
-         * command processor so it can use redirection,
-         * pipes, aliases, and other shell features.
+         * Each chained command is passed back through
+         * the normal command processor so shell features
+         * such as redirection and expansion still work.
+         *
+         * CommandChainEngine checks ExecutionStatus
+         * after each command and stops the chain when
+         * a command reports failure.
          */
         if (
             CommandChainEngine.execute(
@@ -117,9 +131,9 @@ object TerminalCommandProcessor {
          * echo Area51 > alien.txt
          * echo Classified >> alien.txt
          *
-         * The command on the left is executed
-         * silently and its output is written
-         * to the target file.
+         * The command on the left side is executed
+         * silently and its output is written into
+         * the target file.
          */
         if (
             redirection != null &&
@@ -141,10 +155,15 @@ object TerminalCommandProcessor {
                 showPrompt = false
             )
 
-            RedirectionEngine.handle(
-                command = expandedCommand,
-                commandOutput = redirectedOutput
-            )
+            val handled =
+                RedirectionEngine.handle(
+                    command = expandedCommand,
+                    commandOutput = redirectedOutput
+                )
+
+            if (!handled) {
+                ExecutionStatus.set(1)
+            }
 
             return
         }
@@ -158,9 +177,8 @@ object TerminalCommandProcessor {
          * uniq < names.txt
          * wc < names.txt
          *
-         * The contents of the file are passed
-         * directly into text commands rather than
-         * being converted into command arguments.
+         * File contents are passed directly to
+         * text-processing commands as input.
          */
         if (
             redirection != null &&
@@ -174,6 +192,8 @@ object TerminalCommandProcessor {
                 )
 
             if (inputContent == null) {
+
+                ExecutionStatus.set(1)
 
                 output.add(
                     "${redirection.target}: No such file"
@@ -199,6 +219,8 @@ object TerminalCommandProcessor {
                 )
 
             if (!handled) {
+
+                ExecutionStatus.set(1)
 
                 output.add(
                     "Input redirection is not supported for: $inputCommandName"
@@ -234,8 +256,8 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Normal commands are delegated to
-         * the centralized command dispatcher.
+         * Normal commands are delegated to the
+         * centralized command dispatcher.
          */
         if (
             CommandDispatcher.dispatch(
@@ -249,8 +271,7 @@ object TerminalCommandProcessor {
 
         /*
          * History expansion remains here because
-         * these commands recursively invoke
-         * the command processor.
+         * these commands recursively invoke process().
          */
         when {
 
@@ -263,6 +284,8 @@ object TerminalCommandProcessor {
                     CommandHistory.lastCommand()
 
                 if (lastCommand == null) {
+
+                    ExecutionStatus.set(1)
 
                     output.add(
                         "No previous command found."
@@ -302,6 +325,8 @@ object TerminalCommandProcessor {
 
                     if (historyNumber < 1) {
 
+                        ExecutionStatus.set(1)
+
                         output.add(
                             "History numbers begin at 1."
                         )
@@ -314,6 +339,8 @@ object TerminalCommandProcessor {
                             )
 
                         if (historyCommand == null) {
+
+                            ExecutionStatus.set(1)
 
                             output.add(
                                 "No such history entry: $historyNumber"
@@ -342,6 +369,8 @@ object TerminalCommandProcessor {
 
                     if (historyCommand == null) {
 
+                        ExecutionStatus.set(1)
+
                         output.add(
                             "No command starts with '$historyReference'"
                         )
@@ -362,8 +391,13 @@ object TerminalCommandProcessor {
 
             /*
              * Unknown command.
+             *
+             * Exit code 127 is the conventional
+             * shell code for "command not found."
              */
             else -> {
+
+                ExecutionStatus.set(127)
 
                 output.add(
                     "Command not found: $trimmedCommand"
