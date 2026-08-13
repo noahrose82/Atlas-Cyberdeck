@@ -2,6 +2,7 @@ package com.noahrose.pocketlab.feature.terminal
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.alias.CommandAliases
+import com.noahrose.pocketlab.feature.terminal.chaining.CommandChainEngine
 import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
 import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
@@ -70,6 +71,32 @@ object TerminalCommandProcessor {
         }
 
         if (trimmedCommand.isBlank()) {
+            return
+        }
+
+        /*
+         * Command chaining.
+         *
+         * Example:
+         *
+         * mkdir Area51 && cd Area51 && touch classified.txt
+         *
+         * Each command is sent back through the normal
+         * command processor so it can use redirection,
+         * pipes, aliases, and other shell features.
+         */
+        if (
+            CommandChainEngine.execute(
+                command = expandedCommand
+            ) { chainedCommand ->
+
+                process(
+                    command = chainedCommand,
+                    output = output,
+                    recordHistory = false
+                )
+            }
+        ) {
             return
         }
 
