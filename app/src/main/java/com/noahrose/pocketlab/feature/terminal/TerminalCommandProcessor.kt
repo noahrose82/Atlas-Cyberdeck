@@ -2,17 +2,18 @@ package com.noahrose.pocketlab.feature.terminal
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.terminal.alias.CommandAliases
+import com.noahrose.pocketlab.feature.terminal.chaining.ConditionalChainEngine
 import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
 import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
 import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
+import com.noahrose.pocketlab.feature.terminal.parsing.CommandTokenizer
 import com.noahrose.pocketlab.feature.terminal.pipe.PipeEngine
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionEngine
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionParser
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionType
 import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
-import com.noahrose.pocketlab.feature.terminal.chaining.ConditionalChainEngine
 
 object TerminalCommandProcessor {
 
@@ -35,47 +36,51 @@ object TerminalCommandProcessor {
                 )
             )
 
- /*
- /*
- * Conditional command chaining.
- *
- * Examples:
- *
- * commandA && commandB
- * commandA || commandB
- * commandA || commandB && commandC
- *
- * && executes the next command when the
- * previous command succeeds.
- *
- * || executes the next command when the
- * previous command fails.
- */
- */
+        /*
+         * Store normal user-entered commands
+         * in command history.
+         *
+         * History expansion commands themselves
+         * are not recorded.
+         */
+        if (
+            recordHistory &&
+            trimmedCommand.isNotBlank() &&
+            !trimmedCommand.startsWith("!")
+        ) {
 
-if (
-    ConditionalChainEngine.execute(
-        command = expandedCommand
-    ) { chainedCommand ->
-
-        process(
-            command = chainedCommand,
-            output = output,
-            recordHistory = false
-        )
-    }
-) {
-    return
-}
+            CommandHistory.add(
+                trimmedCommand
+            )
+        }
 
         /*
-         * Display the shell prompt for normal
-         * user-entered commands.
+         * Conditional command chaining.
          *
-         * Internal command execution can disable
-         * prompt rendering.
+         * Examples:
+         *
+         * commandA && commandB
+         * commandA || commandB
+         * commandA || commandB && commandC
          */
+        if (
+            ConditionalChainEngine.execute(
+                command = expandedCommand
+            ) { chainedCommand ->
 
+                process(
+                    command = chainedCommand,
+                    output = output,
+                    recordHistory = false
+                )
+            }
+        ) {
+            return
+        }
+
+        /*
+         * Display the shell prompt.
+         */
         if (showPrompt) {
 
             val currentPath =
@@ -91,21 +96,14 @@ if (
         }
 
         /*
-         * Every command begins with a successful
-         * execution status.
-         *
-         * Individual handlers may replace this
-         * with a non-zero exit code if execution fails.
+         * Every command starts with a success
+         * status unless a handler reports failure.
          */
-
         ExecutionStatus.set(0)
 
-
         /*
-         * Detect shell redirection before normal
-         * command parsing and dispatch.
+         * Detect shell redirection.
          */
-
         val redirection =
             RedirectionParser.parse(
                 expandedCommand
@@ -114,16 +112,9 @@ if (
         /*
          * Output redirection.
          *
-         * Examples:
-         *
-         * echo Area51 > alien.txt
-         * echo Classified >> alien.txt
-         *
-         * The command on the left side is executed
-         * silently and its output is written into
-         * the target file.
+         * >
+         * >>
          */
-
         if (
             redirection != null &&
             (
@@ -160,16 +151,8 @@ if (
         /*
          * Input redirection.
          *
-         * Examples:
-         *
-         * sort < names.txt
-         * uniq < names.txt
-         * wc < names.txt
-         *
-         * File contents are passed directly to
-         * text-processing commands as input.
+         * <
          */
-
         if (
             redirection != null &&
             redirection.type ==
@@ -192,14 +175,20 @@ if (
                 return
             }
 
-            val inputParts =
-                redirection.command.split(
-                    Regex("\\s+"),
-                    limit = 2
+            val inputTokens =
+                CommandTokenizer.tokenize(
+                    redirection.command
                 )
 
+            if (inputTokens.isEmpty()) {
+
+                ExecutionStatus.set(1)
+
+                return
+            }
+
             val inputCommandName =
-                inputParts[0].lowercase()
+                inputTokens.first().lowercase()
 
             val handled =
                 TextCommands.handleInput(
@@ -221,23 +210,67 @@ if (
         }
 
         /*
-         * Normal command parsing.
+         * Quote-aware command parsing.
+         *
+         * Examples:
+         *
+         * mkdir "Area 51"
+         * touch "classified files.txt"
+         * cp "file one.txt" "file two.txt"
          */
-
-        val parts =
-            expandedCommand.split(
-                Regex("\\s+"),
-                limit = 2
+        val tokens =
+            CommandTokenizer.tokenize(
+                expandedCommand
             )
 
+        if (tokens.isEmpty()) {
+            return
+        }
+
         val commandName =
-            parts[0].lowercase()
+            tokens.first().lowercase()
 
         /*
-         * Pipe execution is handled before
-         * normal command dispatch.
+         * cp and mv need individual argument
+         * boundaries preserved.
+         *
+         * Most existing handlers still expect:
+         *
+         * parts[0] = command
+         * parts[1] = remaining argument text
          */
+        val parts =
+            when (commandName) {
 
+                "cp",
+                "mv" -> {
+
+                    tokens
+                }
+
+                else -> {
+
+                    if (tokens.size == 1) {
+
+                        listOf(
+                            commandName
+                        )
+
+                    } else {
+
+                        listOf(
+                            commandName,
+                            tokens
+                                .drop(1)
+                                .joinToString(" ")
+                        )
+                    }
+                }
+            }
+
+        /*
+         * Pipe execution.
+         */
         if (
             PipeEngine.handle(
                 command = expandedCommand,
@@ -248,10 +281,8 @@ if (
         }
 
         /*
-         * Normal commands are delegated to the
-         * centralized command dispatcher.
+         * Normal command dispatch.
          */
-
         if (
             CommandDispatcher.dispatch(
                 commandName = commandName,
@@ -263,16 +294,13 @@ if (
         }
 
         /*
-         * History expansion remains here because
-         * these commands recursively invoke process().
+         * History expansion.
          */
-
         when {
 
             /*
-             * Repeat the most recent command.
+             * Repeat most recent command.
              */
-
             commandName == "!!" -> {
 
                 val lastCommand =
@@ -300,15 +328,9 @@ if (
             }
 
             /*
-             * Execute a command by history number
+             * Execute by history number
              * or command prefix.
-             *
-             * Examples:
-             *
-             * !2
-             * !mkdir
              */
-
             commandName.startsWith("!") -> {
 
                 val historyReference =
@@ -387,11 +409,7 @@ if (
 
             /*
              * Unknown command.
-             *
-             * Exit code 127 is the conventional
-             * shell code for "command not found."
              */
-
             else -> {
 
                 ExecutionStatus.set(127)

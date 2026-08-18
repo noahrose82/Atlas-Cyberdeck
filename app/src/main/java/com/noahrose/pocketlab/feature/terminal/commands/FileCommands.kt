@@ -74,61 +74,35 @@ object FileCommands : CommandHandler {
                     return true
                 }
 
-                val fileNames =
-                    parts[1]
-                        .trim()
-                        .split(
-                            Regex("\\s+")
-                        )
+                val fileName =
+                    parts[1].trim()
 
-                var failed = false
+                val content =
+                    VirtualFileSystem.readFile(
+                        fileName
+                    )
 
-                fileNames.forEachIndexed { index, fileName ->
+                if (content == null) {
 
-                    val content =
-                        VirtualFileSystem.readFile(
-                            fileName
-                        )
+                    ExecutionStatus.set(1)
 
-                    if (content == null) {
+                    output.add(
+                        "cat: $fileName: No such file"
+                    )
 
-                        failed = true
+                } else {
 
-                        output.add(
-                            "cat: $fileName: No such file"
-                        )
+                    ExecutionStatus.set(0)
+
+                    if (content.isEmpty()) {
+
+                        output.add("<empty>")
 
                     } else {
 
-                        if (fileNames.size > 1) {
-
-                            output.add(
-                                "----- $fileName -----"
-                            )
-                        }
-
-                        if (content.isEmpty()) {
-
-                            output.add("<empty>")
-
-                        } else {
-
-                            output.add(content)
-                        }
-
-                        if (
-                            fileNames.size > 1 &&
-                            index != fileNames.lastIndex
-                        ) {
-
-                            output.add("")
-                        }
+                        output.add(content)
                     }
                 }
-
-                ExecutionStatus.set(
-                    if (failed) 1 else 0
-                )
 
                 return true
             }
@@ -214,30 +188,18 @@ object FileCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * Quote-aware copy command.
+             *
+             * parts example:
+             *
+             * [0] cp
+             * [1] classified document.txt
+             * [2] backup documents.txt
+             */
             "cp" -> {
 
-                if (
-                    parts.size < 2 ||
-                    parts[1].isBlank()
-                ) {
-
-                    ExecutionStatus.set(1)
-
-                    output.add(
-                        "Usage: cp <source...> <destination>"
-                    )
-
-                    return true
-                }
-
-                val arguments =
-                    parts[1]
-                        .trim()
-                        .split(
-                            Regex("\\s+")
-                        )
-
-                if (arguments.size < 2) {
+                if (parts.size < 3) {
 
                     ExecutionStatus.set(1)
 
@@ -249,10 +211,12 @@ object FileCommands : CommandHandler {
                 }
 
                 val destination =
-                    arguments.last()
+                    parts.last()
 
                 val sources =
-                    arguments.dropLast(1)
+                    parts
+                        .drop(1)
+                        .dropLast(1)
 
                 var copiedCount = 0
                 var failed = false
@@ -297,30 +261,12 @@ object FileCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * Quote-aware move command.
+             */
             "mv" -> {
 
-                if (
-                    parts.size < 2 ||
-                    parts[1].isBlank()
-                ) {
-
-                    ExecutionStatus.set(1)
-
-                    output.add(
-                        "Usage: mv <source...> <destination>"
-                    )
-
-                    return true
-                }
-
-                val arguments =
-                    parts[1]
-                        .trim()
-                        .split(
-                            Regex("\\s+")
-                        )
-
-                if (arguments.size < 2) {
+                if (parts.size < 3) {
 
                     ExecutionStatus.set(1)
 
@@ -332,10 +278,12 @@ object FileCommands : CommandHandler {
                 }
 
                 val destination =
-                    arguments.last()
+                    parts.last()
 
                 val sources =
-                    arguments.dropLast(1)
+                    parts
+                        .drop(1)
+                        .dropLast(1)
 
                 var movedCount = 0
                 var failed = false
@@ -455,9 +403,9 @@ object FileCommands : CommandHandler {
 
                         ExecutionStatus.set(0)
 
-                        matches.forEach { line ->
-                            output.add(line)
-                        }
+                        matches.forEach(
+                            output::add
+                        )
                     }
                 }
 
@@ -503,9 +451,9 @@ object FileCommands : CommandHandler {
                     content
                         .lines()
                         .take(3)
-                        .forEach { line ->
-                            output.add(line)
-                        }
+                        .forEach(
+                            output::add
+                        )
                 }
 
                 return true
@@ -550,9 +498,9 @@ object FileCommands : CommandHandler {
                     content
                         .lines()
                         .takeLast(3)
-                        .forEach { line ->
-                            output.add(line)
-                        }
+                        .forEach(
+                            output::add
+                        )
                 }
 
                 return true
