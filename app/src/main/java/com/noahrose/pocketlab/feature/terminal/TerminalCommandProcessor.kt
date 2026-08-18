@@ -14,6 +14,7 @@ import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionEngine
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionParser
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionType
 import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
+import com.noahrose.pocketlab.feature.terminal.sequential.SequentialCommandEngine
 
 object TerminalCommandProcessor {
 
@@ -52,6 +53,32 @@ object TerminalCommandProcessor {
             CommandHistory.add(
                 trimmedCommand
             )
+        }
+
+        /*
+         * Sequential command execution.
+         *
+         * Examples:
+         *
+         * commandA ; commandB
+         * commandA ; commandB ; commandC
+         *
+         * Unlike && and ||, every command executes
+         * regardless of the previous exit status.
+         */
+        if (
+            SequentialCommandEngine.execute(
+                command = expandedCommand
+            ) { sequentialCommand ->
+
+                process(
+                    command = sequentialCommand,
+                    output = output,
+                    recordHistory = false
+                )
+            }
+        ) {
+            return
         }
 
         /*
