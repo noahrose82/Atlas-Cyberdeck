@@ -10,39 +10,47 @@ object RedirectionEngine {
     ): Boolean {
 
         val request =
-            RedirectionParser.parse(command)
-                ?: return false
+            RedirectionParser.parse(
+                command
+            ) ?: return false
+
+        val newContent =
+            commandOutput.joinToString(
+                separator = "\n"
+            )
 
         return when (request.type) {
 
             RedirectionType.OVERWRITE -> {
 
-                ensureFileExists(
-                    request.target
-                )
-
-                val content =
-                    commandOutput.joinToString("\n")
+                if (
+                    !ensureFileExists(
+                        request.target
+                    )
+                ) {
+                    return false
+                }
 
                 VirtualFileSystem.writeFile(
                     name = request.target,
-                    content = content
+                    content = newContent
                 )
             }
 
             RedirectionType.APPEND -> {
 
-                ensureFileExists(
-                    request.target
-                )
+                if (
+                    !ensureFileExists(
+                        request.target
+                    )
+                ) {
+                    return false
+                }
 
                 val existingContent =
                     VirtualFileSystem.readFile(
                         request.target
-                    ) ?: ""
-
-                val newContent =
-                    commandOutput.joinToString("\n")
+                    ) ?: return false
 
                 val combinedContent =
                     when {
@@ -54,7 +62,18 @@ object RedirectionEngine {
                             existingContent
 
                         else ->
-                            "$existingContent\n$newContent"
+                            buildString {
+
+                                append(
+                                    existingContent
+                                )
+
+                                append("\n")
+
+                                append(
+                                    newContent
+                                )
+                            }
                     }
 
                 VirtualFileSystem.writeFile(
@@ -65,36 +84,27 @@ object RedirectionEngine {
 
             RedirectionType.INPUT -> {
 
-                val content =
-                    VirtualFileSystem.readFile(
-                        request.target
-                    )
-
-                if (content == null) {
-
-                    false
-
-                } else {
-
-                    true
-                }
+                VirtualFileSystem.readFile(
+                    request.target
+                ) != null
             }
         }
     }
 
     private fun ensureFileExists(
         fileName: String
-    ) {
+    ): Boolean {
 
         if (
             VirtualFileSystem.readFile(
                 fileName
-            ) == null
+            ) != null
         ) {
-
-            VirtualFileSystem.createFile(
-                fileName
-            )
+            return true
         }
+
+        return VirtualFileSystem.createFile(
+            fileName
+        )
     }
 }
