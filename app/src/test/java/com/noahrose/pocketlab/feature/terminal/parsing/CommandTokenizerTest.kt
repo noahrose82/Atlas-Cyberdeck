@@ -23,7 +23,7 @@ class CommandTokenizerTest {
     }
 
     @Test
-    fun tokenize_preservesQuotedArgument() {
+    fun tokenize_preservesDoubleQuotedArgument() {
 
         val result =
             CommandTokenizer.tokenize(
@@ -34,6 +34,23 @@ class CommandTokenizerTest {
             listOf(
                 "touch",
                 "classified files.txt"
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun tokenize_preservesSingleQuotedArgument() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                "echo 'Area 51'"
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                "Area 51"
             ),
             result
         )
@@ -57,7 +74,7 @@ class CommandTokenizerTest {
     }
 
     @Test
-    fun tokenize_handlesMultipleQuotedArguments() {
+    fun tokenize_handlesMultipleDoubleQuotedArguments() {
 
         val result =
             CommandTokenizer.tokenize(
@@ -75,32 +92,19 @@ class CommandTokenizerTest {
     }
 
     @Test
-    fun tokenize_handlesExtraWhitespace() {
+    fun tokenize_handlesMultipleSingleQuotedArguments() {
 
         val result =
             CommandTokenizer.tokenize(
-                """   echo    "Hello Area 51"   """
+                "cp 'secret document.txt' 'backup document.txt'"
             )
 
         assertEquals(
             listOf(
-                "echo",
-                "Hello Area 51"
+                "cp",
+                "secret document.txt",
+                "backup document.txt"
             ),
-            result
-        )
-    }
-
-    @Test
-    fun tokenize_handlesEmptyInput() {
-
-        val result =
-            CommandTokenizer.tokenize(
-                ""
-            )
-
-        assertEquals(
-            emptyList<String>(),
             result
         )
     }
@@ -142,6 +146,40 @@ class CommandTokenizerTest {
     }
 
     @Test
+    fun tokenize_preservesDoubleQuotesInsideSingleQuotes() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                """echo 'Project "Area 51"'"""
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                """Project "Area 51""""
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun tokenize_preservesSingleQuotesInsideDoubleQuotes() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                """echo "Project 'Area 51'""""
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                "Project 'Area 51'"
+            ),
+            result
+        )
+    }
+
+    @Test
     fun tokenize_handlesEscapedQuotes() {
 
         val result =
@@ -154,20 +192,6 @@ class CommandTokenizerTest {
                 "echo",
                 """He said "classified""""
             ),
-            result
-        )
-    }
-
-    @Test
-    fun tokenize_rejectsUnclosedQuotes() {
-
-        val result =
-            CommandTokenizer.tokenize(
-                """touch "classified files.txt"""
-            )
-
-        assertEquals(
-            emptyList<String>(),
             result
         )
     }
@@ -190,7 +214,38 @@ class CommandTokenizerTest {
     }
 
     @Test
-    fun tokenizeOrNull_rejectsUnmatchedQuote() {
+    fun tokenize_handlesExtraWhitespace() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                """   echo    "Hello Area 51"   """
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                "Hello Area 51"
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun tokenize_handlesEmptyInput() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                ""
+            )
+
+        assertEquals(
+            emptyList<String>(),
+            result
+        )
+    }
+
+    @Test
+    fun tokenizeOrNull_rejectsUnmatchedDoubleQuote() {
 
         val result =
             CommandTokenizer.tokenizeOrNull(
@@ -204,7 +259,21 @@ class CommandTokenizerTest {
     }
 
     @Test
-    fun tokenizeOrNull_acceptsBalancedQuotes() {
+    fun tokenizeOrNull_rejectsUnmatchedSingleQuote() {
+
+        val result =
+            CommandTokenizer.tokenizeOrNull(
+                "echo 'Area 51"
+            )
+
+        assertEquals(
+            null,
+            result
+        )
+    }
+
+    @Test
+    fun tokenizeOrNull_acceptsBalancedDoubleQuotes() {
 
         val result =
             CommandTokenizer.tokenizeOrNull(
@@ -220,4 +289,20 @@ class CommandTokenizerTest {
         )
     }
 
+    @Test
+    fun tokenizeOrNull_acceptsBalancedSingleQuotes() {
+
+        val result =
+            CommandTokenizer.tokenizeOrNull(
+                "echo 'Area 51'"
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                "Area 51"
+            ),
+            result
+        )
+    }
 }

@@ -2,12 +2,12 @@ package com.noahrose.pocketlab.feature.terminal.parsing
 
 object CommandTokenizer {
 
-    /*
-     * Standard tokenizer entry point.
-     *
-     * Returns an empty list when the input
-     * contains invalid shell syntax.
-     */
+    private enum class QuoteMode {
+        NONE,
+        SINGLE,
+        DOUBLE
+    }
+
     fun tokenize(
         input: String
     ): List<String> {
@@ -17,19 +17,6 @@ object CommandTokenizer {
         ) ?: emptyList()
     }
 
-    /*
-     * Quote-aware tokenizer that returns null
-     * when malformed syntax is detected.
-     *
-     * This allows the terminal processor to
-     * distinguish:
-     *
-     * empty command
-     *
-     * from:
-     *
-     * echo "Area 51
-     */
     fun tokenizeOrNull(
         input: String
     ): List<String>? {
@@ -40,7 +27,9 @@ object CommandTokenizer {
         val current =
             StringBuilder()
 
-        var insideQuotes = false
+        var quoteMode =
+            QuoteMode.NONE
+
         var escaping = false
 
         input.forEach { character ->
@@ -56,19 +45,40 @@ object CommandTokenizer {
                     escaping = false
                 }
 
-                character == '\\' -> {
+                character == '\\' &&
+                        quoteMode != QuoteMode.SINGLE -> {
 
                     escaping = true
                 }
 
-                character == '"' -> {
+                character == '"' &&
+                        quoteMode != QuoteMode.SINGLE -> {
 
-                    insideQuotes =
-                        !insideQuotes
+                    quoteMode =
+                        if (
+                            quoteMode == QuoteMode.DOUBLE
+                        ) {
+                            QuoteMode.NONE
+                        } else {
+                            QuoteMode.DOUBLE
+                        }
+                }
+
+                character == '\'' &&
+                        quoteMode != QuoteMode.DOUBLE -> {
+
+                    quoteMode =
+                        if (
+                            quoteMode == QuoteMode.SINGLE
+                        ) {
+                            QuoteMode.NONE
+                        } else {
+                            QuoteMode.SINGLE
+                        }
                 }
 
                 character.isWhitespace() &&
-                        !insideQuotes -> {
+                        quoteMode == QuoteMode.NONE -> {
 
                     if (current.isNotEmpty()) {
 
@@ -89,20 +99,12 @@ object CommandTokenizer {
             }
         }
 
-        /*
-         * Preserve a trailing backslash rather
-         * than silently discarding it.
-         */
         if (escaping) {
 
             current.append('\\')
         }
 
-        /*
-         * An unmatched quotation mark is
-         * malformed shell syntax.
-         */
-        if (insideQuotes) {
+        if (quoteMode != QuoteMode.NONE) {
 
             return null
         }
