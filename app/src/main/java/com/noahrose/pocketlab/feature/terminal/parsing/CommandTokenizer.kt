@@ -2,9 +2,37 @@ package com.noahrose.pocketlab.feature.terminal.parsing
 
 object CommandTokenizer {
 
+    /*
+     * Standard tokenizer entry point.
+     *
+     * Returns an empty list when the input
+     * contains invalid shell syntax.
+     */
     fun tokenize(
         input: String
     ): List<String> {
+
+        return tokenizeOrNull(
+            input
+        ) ?: emptyList()
+    }
+
+    /*
+     * Quote-aware tokenizer that returns null
+     * when malformed syntax is detected.
+     *
+     * This allows the terminal processor to
+     * distinguish:
+     *
+     * empty command
+     *
+     * from:
+     *
+     * echo "Area 51
+     */
+    fun tokenizeOrNull(
+        input: String
+    ): List<String>? {
 
         val tokens =
             mutableListOf<String>()
@@ -71,12 +99,12 @@ object CommandTokenizer {
         }
 
         /*
-         * Unmatched quotation marks represent
-         * malformed shell input.
+         * An unmatched quotation mark is
+         * malformed shell syntax.
          */
         if (insideQuotes) {
 
-            return emptyList()
+            return null
         }
 
         if (current.isNotEmpty()) {

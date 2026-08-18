@@ -189,4 +189,35 @@ class CommandTokenizerTest {
         )
     }
 
+    @Test
+    fun tokenizeOrNull_rejectsUnmatchedQuote() {
+
+        val result =
+            CommandTokenizer.tokenizeOrNull(
+                """echo "Area 51"""
+            )
+
+        assertEquals(
+            null,
+            result
+        )
+    }
+
+    @Test
+    fun tokenizeOrNull_acceptsBalancedQuotes() {
+
+        val result =
+            CommandTokenizer.tokenizeOrNull(
+                """echo "Area 51""""
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                "Area 51"
+            ),
+            result
+        )
+    }
+
 }

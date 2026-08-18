@@ -219,9 +219,20 @@ object TerminalCommandProcessor {
          * cp "file one.txt" "file two.txt"
          */
         val tokens =
-            CommandTokenizer.tokenize(
+            CommandTokenizer.tokenizeOrNull(
                 expandedCommand
             )
+
+        if (tokens == null) {
+
+            ExecutionStatus.set(2)
+
+            output.add(
+                "syntax error: unmatched quote"
+            )
+
+            return
+        }
 
         if (tokens.isEmpty()) {
             return
