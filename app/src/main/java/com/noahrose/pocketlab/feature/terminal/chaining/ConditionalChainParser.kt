@@ -6,69 +6,175 @@ object ConditionalChainParser {
         command: String
     ): List<ConditionalCommand>? {
 
+        val segments =
+            mutableListOf<String>()
+
+        val operators =
+            mutableListOf<ConditionalOperator>()
+
+        val current =
+            StringBuilder()
+
+        var quoteMode =
+            QuoteMode.NONE
+
+        var escaping = false
+        var index = 0
+
+        while (index < command.length) {
+
+            val character =
+                command[index]
+
+            when {
+
+                escaping -> {
+
+                    current.append(character)
+                    escaping = false
+                }
+
+                character == '\\' &&
+                        quoteMode != QuoteMode.SINGLE -> {
+
+                    current.append(character)
+                    escaping = true
+                }
+
+                character == '"' &&
+                        quoteMode != QuoteMode.SINGLE -> {
+
+                    current.append(character)
+
+                    quoteMode =
+                        if (quoteMode == QuoteMode.DOUBLE) {
+                            QuoteMode.NONE
+                        } else {
+                            QuoteMode.DOUBLE
+                        }
+                }
+
+                character == '\'' &&
+                        quoteMode != QuoteMode.DOUBLE -> {
+
+                    current.append(character)
+
+                    quoteMode =
+                        if (quoteMode == QuoteMode.SINGLE) {
+                            QuoteMode.NONE
+                        } else {
+                            QuoteMode.SINGLE
+                        }
+                }
+
+                quoteMode == QuoteMode.NONE &&
+                        character == '&' &&
+                        index + 1 < command.length &&
+                        command[index + 1] == '&' -> {
+
+                    val segment =
+                        current
+                            .toString()
+                            .trim()
+
+                    if (segment.isBlank()) {
+                        return null
+                    }
+
+                    segments.add(segment)
+                    operators.add(
+                        ConditionalOperator.AND
+                    )
+
+                    current.clear()
+
+                    index++
+                }
+
+                quoteMode == QuoteMode.NONE &&
+                        character == '|' &&
+                        index + 1 < command.length &&
+                        command[index + 1] == '|' -> {
+
+                    val segment =
+                        current
+                            .toString()
+                            .trim()
+
+                    if (segment.isBlank()) {
+                        return null
+                    }
+
+                    segments.add(segment)
+                    operators.add(
+                        ConditionalOperator.OR
+                    )
+
+                    current.clear()
+
+                    index++
+                }
+
+                else -> {
+
+                    current.append(character)
+                }
+            }
+
+            index++
+        }
+
+        /*
+         * This parser only owns conditional syntax.
+         *
+         * If no && or || operator was discovered,
+         * the normal shell processor should handle
+         * the command.
+         */
+        if (operators.isEmpty()) {
+            return null
+        }
+
+        val finalSegment =
+            current
+                .toString()
+                .trim()
+
+        if (finalSegment.isBlank()) {
+            return null
+        }
+
+        segments.add(finalSegment)
+
         if (
-            !command.contains("&&") &&
-            !command.contains("||")
+            segments.size !=
+            operators.size + 1
         ) {
             return null
         }
 
-        val tokens =
-            Regex("""\s*(&&|\|\|)\s*""")
-                .split(command)
-                .map {
-                    it.trim()
-                }
+        return segments.mapIndexed { segmentIndex, segment ->
 
-        val operators =
-            Regex("""&&|\|\|""")
-                .findAll(command)
-                .map { match ->
-                    match.value
-                }
-                .toList()
+            ConditionalCommand(
+                command = segment,
+                operatorBefore =
+                    if (segmentIndex == 0) {
 
-        if (tokens.size < 2) {
-            return null
-        }
+                        null
 
-        val result =
-            mutableListOf<ConditionalCommand>()
+                    } else {
 
-        tokens.forEachIndexed { index, token ->
-
-            if (token.isBlank()) {
-                return null
-            }
-
-            val operatorBefore =
-                if (index == 0) {
-
-                    null
-
-                } else {
-
-                    when (operators[index - 1]) {
-
-                        "&&" ->
-                            ConditionalOperator.AND
-
-                        "||" ->
-                            ConditionalOperator.OR
-
-                        else ->
-                            return null
+                        operators[
+                            segmentIndex - 1
+                        ]
                     }
-                }
-
-            result.add(
-                ConditionalCommand(
-                    command = token,
-                    operatorBefore = operatorBefore
-                )
             )
         }
+    }
 
-        return result
+    private enum class QuoteMode {
+        NONE,
+        SINGLE,
+        DOUBLE
     }
 }

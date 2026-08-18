@@ -125,4 +125,84 @@ class ConditionalChainParserTest {
 
         assertNull(result)
     }
+
+    @Test
+    fun parse_ignoresAndOperatorInsideDoubleQuotes() {
+
+        val result =
+            ConditionalChainParser.parse(
+                """echo "A && B""""
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun parse_ignoresOrOperatorInsideSingleQuotes() {
+
+        val result =
+            ConditionalChainParser.parse(
+                "echo 'A || B'"
+            )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun parse_handlesQuotedTextInsideRealChain() {
+
+        val result =
+            ConditionalChainParser.parse(
+                """echo "Area && 51" && echo success"""
+            )
+
+        assertNotNull(result)
+
+        assertEquals(
+            2,
+            result!!.size
+        )
+
+        assertEquals(
+            """echo "Area && 51"""",
+            result[0].command
+        )
+
+        assertEquals(
+            ConditionalOperator.AND,
+            result[1].operatorBefore
+        )
+
+        assertEquals(
+            "echo success",
+            result[1].command
+        )
+    }
+
+    @Test
+    fun parse_handlesMixedRealOperatorsAndQuotedOperators() {
+
+        val result =
+            ConditionalChainParser.parse(
+                """echo "A || B" && cd Missing || echo fallback"""
+            )
+
+        assertNotNull(result)
+
+        assertEquals(
+            3,
+            result!!.size
+        )
+
+        assertEquals(
+            ConditionalOperator.AND,
+            result[1].operatorBefore
+        )
+
+        assertEquals(
+            ConditionalOperator.OR,
+            result[2].operatorBefore
+        )
+    }
+
 }

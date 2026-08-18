@@ -1,6 +1,8 @@
 package com.noahrose.pocketlab.feature.terminal.pipe
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
+import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
+import com.noahrose.pocketlab.feature.terminal.parsing.CommandTokenizer
 
 object PipeEngine {
 
@@ -9,30 +11,25 @@ object PipeEngine {
         output: MutableList<String>
     ): Boolean {
 
-        if (!command.contains("|")) {
-            return false
-        }
-
         val stages =
-            command
-                .split("|")
-                .map { it.trim() }
-                .filter { it.isNotBlank() }
+            splitPipelineStages(
+                command
+            ) ?: return false
 
         if (stages.size < 2) {
-
-            output.add(
-                "Usage: <command> | <command>"
-            )
-
-            return true
+            return false
         }
 
         var pipedLines =
             executeInputStage(
                 stage = stages.first(),
                 output = output
-            ) ?: return true
+            ) ?: run {
+
+                ExecutionStatus.set(1)
+
+                return true
+            }
 
         stages
             .drop(1)
@@ -43,14 +40,194 @@ object PipeEngine {
                         stage = stage,
                         input = pipedLines,
                         output = output
-                    ) ?: return true
+                    ) ?: run {
+
+                        ExecutionStatus.set(1)
+
+                        return true
+                    }
             }
 
         pipedLines.forEach { line ->
             output.add(line)
         }
 
+        ExecutionStatus.set(0)
+
         return true
+    }
+
+    /*
+     * Split a pipeline only on a single |
+     * appearing outside quoted text.
+     *
+     * Examples:
+     *
+     * cat file.txt | grep Atlas
+     *      -> pipeline
+     *
+     * echo "A | B"
+     *      -> not a pipeline
+     *
+     * echo 'A || B'
+     *      -> not a pipeline
+     *
+     * commandA || commandB
+     *      -> belongs to conditional chaining,
+     *         not the pipe engine
+     */
+    private fun splitPipelineStages(
+        command: String
+    ): List<String>? {
+
+        val stages =
+            mutableListOf<String>()
+
+        val current =
+            StringBuilder()
+
+        var quoteMode =
+            QuoteMode.NONE
+
+        var escaping = false
+        var index = 0
+        var foundPipe = false
+
+        while (index < command.length) {
+
+            val character =
+                command[index]
+
+            when {
+
+                escaping -> {
+
+                    current.append(
+                        character
+                    )
+
+                    escaping = false
+                }
+
+                character == '\\' &&
+                        quoteMode != QuoteMode.SINGLE -> {
+
+                    current.append(
+                        character
+                    )
+
+                    escaping = true
+                }
+
+                character == '"' &&
+                        quoteMode != QuoteMode.SINGLE -> {
+
+                    current.append(
+                        character
+                    )
+
+                    quoteMode =
+                        if (
+                            quoteMode ==
+                            QuoteMode.DOUBLE
+                        ) {
+                            QuoteMode.NONE
+                        } else {
+                            QuoteMode.DOUBLE
+                        }
+                }
+
+                character == '\'' &&
+                        quoteMode != QuoteMode.DOUBLE -> {
+
+                    current.append(
+                        character
+                    )
+
+                    quoteMode =
+                        if (
+                            quoteMode ==
+                            QuoteMode.SINGLE
+                        ) {
+                            QuoteMode.NONE
+                        } else {
+                            QuoteMode.SINGLE
+                        }
+                }
+
+                quoteMode == QuoteMode.NONE &&
+                        character == '|' -> {
+
+                    /*
+                     * || belongs to conditional
+                     * command chaining.
+                     */
+                    if (
+                        index + 1 <
+                        command.length &&
+                        command[index + 1] == '|'
+                    ) {
+
+                        return null
+                    }
+
+                    val stage =
+                        current
+                            .toString()
+                            .trim()
+
+                    if (stage.isBlank()) {
+
+                        ExecutionStatus.set(2)
+
+                        return listOf(
+                            ""
+                        )
+                    }
+
+                    stages.add(
+                        stage
+                    )
+
+                    current.clear()
+
+                    foundPipe = true
+                }
+
+                else -> {
+
+                    current.append(
+                        character
+                    )
+                }
+            }
+
+            index++
+        }
+
+        if (!foundPipe) {
+            return null
+        }
+
+        val finalStage =
+            current
+                .toString()
+                .trim()
+
+        if (finalStage.isBlank()) {
+
+            ExecutionStatus.set(2)
+
+            return listOf(
+                ""
+            )
+        }
+
+        stages.add(
+            finalStage
+        )
+
+        return stages
     }
 
     private fun executeInputStage(
@@ -58,23 +235,31 @@ object PipeEngine {
         output: MutableList<String>
     ): List<String>? {
 
-        val parts =
-            stage.split(
-                Regex("\\s+"),
-                limit = 2
+        val tokens =
+            CommandTokenizer.tokenizeOrNull(
+                stage
             )
 
+        if (
+            tokens == null ||
+            tokens.isEmpty()
+        ) {
+
+            output.add(
+                "pipe: invalid input command"
+            )
+
+            return null
+        }
+
         val commandName =
-            parts[0].lowercase()
+            tokens.first().lowercase()
 
         return when (commandName) {
 
             "cat" -> {
 
-                if (
-                    parts.size < 2 ||
-                    parts[1].isBlank()
-                ) {
+                if (tokens.size < 2) {
 
                     output.add(
                         "Usage: cat <filename> | <command>"
@@ -85,14 +270,12 @@ object PipeEngine {
                 } else {
 
                     val fileNames =
-                        parts[1]
-                            .trim()
-                            .split(
-                                Regex("\\s+")
-                            )
+                        tokens.drop(1)
 
                     val lines =
                         mutableListOf<String>()
+
+                    var failed = false
 
                     fileNames.forEach { fileName ->
 
@@ -102,6 +285,8 @@ object PipeEngine {
                             )
 
                         if (content == null) {
+
+                            failed = true
 
                             output.add(
                                 "cat: $fileName: No such file"
@@ -115,20 +300,24 @@ object PipeEngine {
                         }
                     }
 
-                    lines
+                    if (failed) {
+                        null
+                    } else {
+                        lines
+                    }
                 }
             }
 
             "echo" -> {
 
                 val text =
-                    if (parts.size < 2) {
-                        ""
-                    } else {
-                        parts[1]
-                    }
+                    tokens
+                        .drop(1)
+                        .joinToString(" ")
 
-                listOf(text)
+                listOf(
+                    text
+                )
             }
 
             else -> {
@@ -148,23 +337,31 @@ object PipeEngine {
         output: MutableList<String>
     ): List<String>? {
 
-        val parts =
-            stage.split(
-                Regex("\\s+"),
-                limit = 2
+        val tokens =
+            CommandTokenizer.tokenizeOrNull(
+                stage
             )
 
+        if (
+            tokens == null ||
+            tokens.isEmpty()
+        ) {
+
+            output.add(
+                "pipe: invalid command"
+            )
+
+            return null
+        }
+
         val commandName =
-            parts[0].lowercase()
+            tokens.first().lowercase()
 
         return when (commandName) {
 
             "grep" -> {
 
-                if (
-                    parts.size < 2 ||
-                    parts[1].isBlank()
-                ) {
+                if (tokens.size < 2) {
 
                     output.add(
                         "Usage: <command> | grep <text>"
@@ -175,10 +372,14 @@ object PipeEngine {
                 } else {
 
                     val searchText =
-                        parts[1].trim()
+                        tokens
+                            .drop(1)
+                            .joinToString(" ")
 
                     input.filter { line ->
-                        line.contains(searchText)
+                        line.contains(
+                            searchText
+                        )
                     }
                 }
             }
@@ -241,5 +442,11 @@ object PipeEngine {
                 null
             }
         }
+    }
+
+    private enum class QuoteMode {
+        NONE,
+        SINGLE,
+        DOUBLE
     }
 }
