@@ -13,10 +13,25 @@ object CommandTokenizer {
             StringBuilder()
 
         var insideQuotes = false
+        var escaping = false
 
         input.forEach { character ->
 
             when {
+
+                escaping -> {
+
+                    current.append(
+                        character
+                    )
+
+                    escaping = false
+                }
+
+                character == '\\' -> {
+
+                    escaping = true
+                }
 
                 character == '"' -> {
 
@@ -44,6 +59,24 @@ object CommandTokenizer {
                     )
                 }
             }
+        }
+
+        /*
+         * Preserve a trailing backslash rather
+         * than silently discarding it.
+         */
+        if (escaping) {
+
+            current.append('\\')
+        }
+
+        /*
+         * Unmatched quotation marks represent
+         * malformed shell input.
+         */
+        if (insideQuotes) {
+
+            return emptyList()
         }
 
         if (current.isNotEmpty()) {

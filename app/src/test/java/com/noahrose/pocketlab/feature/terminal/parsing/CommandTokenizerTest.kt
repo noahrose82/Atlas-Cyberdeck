@@ -141,4 +141,52 @@ class CommandTokenizerTest {
         )
     }
 
+    @Test
+    fun tokenize_handlesEscapedQuotes() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                """echo "He said \"classified\"""""
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                """He said "classified""""
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun tokenize_rejectsUnclosedQuotes() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                """touch "classified files.txt"""
+            )
+
+        assertEquals(
+            emptyList<String>(),
+            result
+        )
+    }
+
+    @Test
+    fun tokenize_preservesEscapedBackslash() {
+
+        val result =
+            CommandTokenizer.tokenize(
+                """echo Area\\51"""
+            )
+
+        assertEquals(
+            listOf(
+                "echo",
+                "Area\\51"
+            ),
+            result
+        )
+    }
+
 }
