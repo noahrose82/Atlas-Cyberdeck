@@ -1,34 +1,54 @@
 package com.noahrose.pocketlab.feature.terminal.alias
 
+import com.noahrose.pocketlab.feature.terminal.persistence.ShellConfigPersistence
+
 object CommandAliases {
 
-    private val aliases = mapOf(
+    /*
+     * Built-in Atlas aliases.
+     */
+    private val builtInAliases =
+        mapOf(
+            "ll" to "ls",
+            "dir" to "ls",
+            "cls" to "clear",
+            "md" to "mkdir",
+            "rd" to "rmdir"
+        )
 
-        "ll" to "ls",
+    /*
+     * User-defined aliases.
+     */
+    private val userAliases =
+        mutableMapOf<String, String>()
 
-        "dir" to "ls",
+    fun resolve(
+        command: String
+    ): String {
 
-        "cls" to "clear",
+        val trimmedCommand =
+            command.trim()
 
-        "md" to "mkdir",
-
-        "rd" to "rmdir"
-    )
-
-    fun resolve(command: String): String {
+        if (trimmedCommand.isBlank()) {
+            return command
+        }
 
         val parts =
-            command.trim().split(
+            trimmedCommand.split(
                 Regex("\\s+"),
                 limit = 2
             )
 
-        if (parts.isEmpty()) {
-            return command
-        }
+        val commandName =
+            parts.first()
 
+        /*
+         * User aliases override built-ins.
+         */
         val resolvedCommand =
-            aliases[parts[0]] ?: parts[0]
+            userAliases[commandName]
+                ?: builtInAliases[commandName]
+                ?: commandName
 
         return if (parts.size == 2) {
 
@@ -38,5 +58,122 @@ object CommandAliases {
 
             resolvedCommand
         }
+    }
+
+    fun setAlias(
+        name: String,
+        command: String
+    ): Boolean {
+
+        val cleanName =
+            name.trim()
+
+        val cleanCommand =
+            command.trim()
+
+        if (
+            cleanName.isBlank() ||
+            cleanCommand.isBlank()
+        ) {
+            return false
+        }
+
+        userAliases[cleanName] =
+            cleanCommand
+
+        persist()
+
+        return true
+    }
+
+    fun removeAlias(
+        name: String
+    ): Boolean {
+
+        val removed =
+            userAliases.remove(
+                name.trim()
+            ) != null
+
+        if (removed) {
+            persist()
+        }
+
+        return removed
+    }
+
+    fun getAlias(
+        name: String
+    ): String? {
+
+        val cleanName =
+            name.trim()
+
+        return userAliases[cleanName]
+            ?: builtInAliases[cleanName]
+    }
+
+    fun getAllAliases(): Map<String, String> {
+
+        return buildMap {
+
+            putAll(
+                builtInAliases
+            )
+
+            putAll(
+                userAliases
+            )
+        }
+    }
+
+    fun getUserAliases(): Map<String, String> {
+
+        return userAliases.toMap()
+    }
+
+    /*
+     * Used during application startup.
+     *
+     * Restores aliases without immediately
+     * writing the same data back to disk.
+     */
+    fun restoreUserAliases(
+        aliases: Map<String, String>
+    ) {
+
+        userAliases.clear()
+
+        aliases.forEach { (name, command) ->
+
+            val cleanName =
+                name.trim()
+
+            val cleanCommand =
+                command.trim()
+
+            if (
+                cleanName.isNotBlank() &&
+                cleanCommand.isNotBlank()
+            ) {
+
+                userAliases[cleanName] =
+                    cleanCommand
+            }
+        }
+    }
+
+    fun clearUserAliases() {
+
+        userAliases.clear()
+
+        persist()
+    }
+
+    private fun persist() {
+
+        ShellConfigPersistence.saveAliases(
+            userAliases
+        )
     }
 }

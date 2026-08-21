@@ -4,6 +4,9 @@ import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
 
 object VariableExpander {
 
+    private val variablePattern =
+        Regex("""\$([A-Za-z_][A-Za-z0-9_]*)""")
+
     fun expand(
         text: String
     ): String {
@@ -26,28 +29,29 @@ object VariableExpander {
                 )
         }
 
-        val variables =
-            listOf(
-                "USER",
-                "HOME",
-                "PWD",
-                "HOSTNAME",
-                "SHELL"
-            )
+        /*
+         * Expand all normal shell-style variables.
+         *
+         * Examples:
+         *
+         * $USER
+         * $HOME
+         * $PROJECT
+         * $ATLAS_PROJECT
+         */
+        expanded =
+            variablePattern.replace(
+                expanded
+            ) { matchResult ->
 
-        for (variable in variables) {
+                val variableName =
+                    matchResult
+                        .groupValues[1]
 
-            val value =
                 EnvironmentVariables.valueOf(
-                    variable
-                ) ?: continue
-
-            expanded =
-                expanded.replace(
-                    "\$$variable",
-                    value
-                )
-        }
+                    variableName
+                ) ?: matchResult.value
+            }
 
         return expanded
     }
