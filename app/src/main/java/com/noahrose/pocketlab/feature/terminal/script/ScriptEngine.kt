@@ -6,7 +6,8 @@ object ScriptEngine {
 
     fun execute(
         script: List<String>,
-        output: MutableList<String>
+        output: MutableList<String>,
+        showPrompts: Boolean = true
     ) {
 
         script.forEach { line ->
@@ -23,7 +24,9 @@ object ScriptEngine {
 
             TerminalCommandProcessor.process(
                 command = command,
-                output = output
+                output = output,
+                recordHistory = false,
+                showPrompt = showPrompts
             )
         }
     }

@@ -5,17 +5,46 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.noahrose.pocketlab.feature.terminal.completion.CommandCompletion
+import com.noahrose.pocketlab.feature.terminal.startup.AtlasRcManager
 
 class TerminalViewModel : ViewModel() {
 
-    var uiState by mutableStateOf(TerminalUiState())
+    var uiState by mutableStateOf(
+        TerminalUiState()
+    )
         private set
 
-    fun updateCommand(command: String) {
+    init {
+        loadStartupConfiguration()
+    }
 
-        uiState = uiState.copy(
-            currentCommand = command
-        )
+    private fun loadStartupConfiguration() {
+
+        val output =
+            uiState.output.toMutableList()
+
+        val executed =
+            AtlasRcManager.execute(
+                output = output
+            )
+
+        if (executed) {
+
+            uiState =
+                uiState.copy(
+                    output = output
+                )
+        }
+    }
+
+    fun updateCommand(
+        command: String
+    ) {
+
+        uiState =
+            uiState.copy(
+                currentCommand = command
+            )
     }
 
     fun completeCommand() {
@@ -27,9 +56,10 @@ class TerminalViewModel : ViewModel() {
 
         if (completion != null) {
 
-            uiState = uiState.copy(
-                currentCommand = completion
-            )
+            uiState =
+                uiState.copy(
+                    currentCommand = completion
+                )
         }
     }
 
@@ -50,9 +80,10 @@ class TerminalViewModel : ViewModel() {
             output = output
         )
 
-        uiState = uiState.copy(
-            output = output,
-            currentCommand = ""
-        )
+        uiState =
+            uiState.copy(
+                output = output,
+                currentCommand = ""
+            )
     }
 }

@@ -13,8 +13,8 @@ import com.noahrose.pocketlab.feature.terminal.pipe.PipeEngine
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionEngine
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionParser
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionType
-import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
 import com.noahrose.pocketlab.feature.terminal.sequential.SequentialCommandEngine
+import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
 
 object TerminalCommandProcessor {
 
@@ -63,8 +63,8 @@ object TerminalCommandProcessor {
          * commandA ; commandB
          * commandA ; commandB ; commandC
          *
-         * Unlike && and ||, every command executes
-         * regardless of the previous exit status.
+         * Prompt visibility is propagated so
+         * silent scripts remain silent.
          */
         if (
             SequentialCommandEngine.execute(
@@ -74,7 +74,8 @@ object TerminalCommandProcessor {
                 process(
                     command = sequentialCommand,
                     output = output,
-                    recordHistory = false
+                    recordHistory = false,
+                    showPrompt = showPrompt
                 )
             }
         ) {
@@ -88,7 +89,9 @@ object TerminalCommandProcessor {
          *
          * commandA && commandB
          * commandA || commandB
-         * commandA || commandB && commandC
+         *
+         * Prompt visibility is propagated so
+         * silent scripts remain silent.
          */
         if (
             ConditionalChainEngine.execute(
@@ -98,7 +101,8 @@ object TerminalCommandProcessor {
                 process(
                     command = chainedCommand,
                     output = output,
-                    recordHistory = false
+                    recordHistory = false,
+                    showPrompt = showPrompt
                 )
             }
         ) {
@@ -123,8 +127,8 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Every command starts with a success
-         * status unless a handler reports failure.
+         * Every command starts with success
+         * unless a handler reports failure.
          */
         ExecutionStatus.set(0)
 
@@ -215,7 +219,9 @@ object TerminalCommandProcessor {
             }
 
             val inputCommandName =
-                inputTokens.first().lowercase()
+                inputTokens
+                    .first()
+                    .lowercase()
 
             val handled =
                 TextCommands.handleInput(
@@ -238,12 +244,6 @@ object TerminalCommandProcessor {
 
         /*
          * Quote-aware command parsing.
-         *
-         * Examples:
-         *
-         * mkdir "Area 51"
-         * touch "classified files.txt"
-         * cp "file one.txt" "file two.txt"
          */
         val tokens =
             CommandTokenizer.tokenizeOrNull(
@@ -266,13 +266,15 @@ object TerminalCommandProcessor {
         }
 
         val commandName =
-            tokens.first().lowercase()
+            tokens
+                .first()
+                .lowercase()
 
         /*
-         * cp and mv need individual argument
-         * boundaries preserved.
+         * cp and mv require individual
+         * argument boundaries.
          *
-         * Most existing handlers still expect:
+         * Other handlers expect:
          *
          * parts[0] = command
          * parts[1] = remaining argument text
@@ -360,7 +362,9 @@ object TerminalCommandProcessor {
 
                     process(
                         command = lastCommand,
-                        output = output
+                        output = output,
+                        recordHistory = false,
+                        showPrompt = showPrompt
                     )
                 }
             }
@@ -410,7 +414,9 @@ object TerminalCommandProcessor {
 
                             process(
                                 command = historyCommand,
-                                output = output
+                                output = output,
+                                recordHistory = false,
+                                showPrompt = showPrompt
                             )
                         }
                     }
@@ -439,7 +445,9 @@ object TerminalCommandProcessor {
 
                         process(
                             command = historyCommand,
-                            output = output
+                            output = output,
+                            recordHistory = false,
+                            showPrompt = showPrompt
                         )
                     }
                 }
