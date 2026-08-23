@@ -445,7 +445,6 @@ object UtilityCommands : CommandHandler {
                 val runtimeAbiStatus =
                     runtimeAbi
                         ?.let { abi ->
-
                             "${abi.displayName} (${abi.androidName})"
                         }
                         ?: "UNSUPPORTED"
@@ -457,6 +456,14 @@ object UtilityCommands : CommandHandler {
                 val runtimeBinaryStatus =
                     runtimeBinary
                         ?.assetName
+                        ?: "UNAVAILABLE"
+
+                val runtimeSourceStatus =
+                    runtimeBinary
+                        ?.source
+                        ?.let { source ->
+                            "${source.projectName} ${source.version}"
+                        }
                         ?: "UNAVAILABLE"
 
                 output.add(
@@ -487,6 +494,10 @@ object UtilityCommands : CommandHandler {
 
                 output.add(
                     "Runtime Binary   : $runtimeBinaryStatus"
+                )
+
+                output.add(
+                    "Runtime Source   : $runtimeSourceStatus"
                 )
 
                 output.add(
@@ -709,7 +720,6 @@ object UtilityCommands : CommandHandler {
                                 .name
                                 .lowercase()
                                 .replaceFirstChar { character ->
-
                                     character.uppercase()
                                 }
 
@@ -896,7 +906,6 @@ object UtilityCommands : CommandHandler {
                             .name
                             .lowercase()
                             .replaceFirstChar { character ->
-
                                 character.uppercase()
                             }
 

@@ -1,5 +1,7 @@
 package com.noahrose.pocketlab.feature.linux.runtime.filesystem
 
+import com.noahrose.pocketlab.feature.linux.runtime.platform.LinuxNativeRuntimeResolver
+
 object LinuxRuntimeAssetValidator {
 
     fun getStatus(): LinuxRuntimeAssetStatus {
@@ -17,6 +19,22 @@ object LinuxRuntimeAssetValidator {
                 .NOT_PREPARED
         }
 
+        /*
+         * PRoot is native executable code shipped
+         * with the signed Atlas APK.
+         *
+         * It no longer lives in writable Linux
+         * runtime storage.
+         */
+        if (
+            !LinuxNativeRuntimeResolver
+                .isProotAvailable()
+        ) {
+
+            return LinuxRuntimeAssetStatus
+                .PROOT_MISSING
+        }
+
         val paths =
             runCatching {
 
@@ -29,25 +47,13 @@ object LinuxRuntimeAssetValidator {
                     .NOT_PREPARED
             }
 
-        if (
-            !paths.prootExecutable.exists() ||
-            !paths.prootExecutable.isFile
-        ) {
-
-            return LinuxRuntimeAssetStatus
-                .PROOT_MISSING
-        }
-
-        if (
-            !paths.prootExecutable.canExecute()
-        ) {
-
-            return LinuxRuntimeAssetStatus
-                .PROOT_NOT_EXECUTABLE
-        }
-
+        /*
+         * /bin/sh is our basic rootfs readiness
+         * indicator.
+         */
         val shell =
-            paths.rootfsDirectory
+            paths
+                .rootfsDirectory
                 .resolve(
                     "bin/sh"
                 )

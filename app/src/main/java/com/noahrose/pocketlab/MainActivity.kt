@@ -9,8 +9,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
-import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimePathManager
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
+import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimePathManager
+import com.noahrose.pocketlab.feature.linux.runtime.platform.LinuxNativeRuntimeResolver
 import com.noahrose.pocketlab.ui.navigation.AtlasNavigation
 import com.noahrose.pocketlab.ui.screens.AtlasSplashScreen
 import com.noahrose.pocketlab.ui.theme.PocketLabTheme
@@ -27,15 +28,32 @@ class MainActivity : ComponentActivity() {
             savedInstanceState
         )
 
+        /*
+         * Restore persistent Linux installation metadata.
+         */
         LinuxRepository.initialize(
             applicationContext
         )
 
+        /*
+         * Resolve Atlas runtime filesystem locations.
+         */
         LinuxRuntimePathManager.initialize(
             applicationContext
         )
 
+        /*
+         * Prepare and validate writable runtime storage.
+         */
         LinuxRuntimeFilesystemManager.prepare()
+
+        /*
+         * Resolve native runtime executables installed
+         * from the signed APK.
+         */
+        LinuxNativeRuntimeResolver.initialize(
+            applicationContext
+        )
 
         setContent {
 

@@ -14,8 +14,10 @@ android {
 
     defaultConfig {
         applicationId = "com.noahrose.pocketlab"
+
         minSdk = 29
         targetSdk = 36
+
         versionCode = 1
         versionName = "1.0"
 
@@ -42,32 +44,108 @@ android {
     buildFeatures {
         compose = true
     }
+
+    /*
+     * Atlas native runtime packaging.
+     *
+     * PRoot is shipped as signed APK native code.
+     *
+     * Legacy native packaging is intentional here:
+     * Atlas needs a real executable filesystem path
+     * inside ApplicationInfo.nativeLibraryDir.
+     */
+    packaging {
+        jniLibs {
+
+            useLegacyPackaging =
+                true
+
+            /*
+             * Preserve the exact verified Atlas
+             * PRoot binary without another AGP
+             * stripping pass.
+             */
+            keepDebugSymbols +=
+                "**/libproot_atlas.so"
+        }
+    }
 }
 
 dependencies {
 
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.compose.material3)
-    implementation(libs.androidx.compose.ui)
-    implementation(libs.androidx.compose.ui.graphics)
-    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(
+        platform(
+            libs.androidx.compose.bom
+        )
+    )
 
-    implementation("androidx.navigation:navigation-compose:2.9.4")
+    implementation(
+        libs.androidx.activity.compose
+    )
 
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(
+        libs.androidx.compose.material3
+    )
 
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
+    implementation(
+        libs.androidx.compose.ui
+    )
 
-    testImplementation("junit:junit:4.13.2")
+    implementation(
+        libs.androidx.compose.ui.graphics
+    )
 
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(libs.androidx.junit)
+    implementation(
+        libs.androidx.compose.ui.tooling.preview
+    )
 
-    debugImplementation(libs.androidx.compose.ui.test.manifest)
-    debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(
+        "androidx.navigation:navigation-compose:2.9.4"
+    )
+
+    implementation(
+        libs.androidx.core.ktx
+    )
+
+    implementation(
+        libs.androidx.lifecycle.runtime.ktx
+    )
+
+    implementation(
+        "androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7"
+    )
+
+    implementation(
+        "androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7"
+    )
+
+    testImplementation(
+        "junit:junit:4.13.2"
+    )
+
+    androidTestImplementation(
+        platform(
+            libs.androidx.compose.bom
+        )
+    )
+
+    androidTestImplementation(
+        libs.androidx.compose.ui.test.junit4
+    )
+
+    androidTestImplementation(
+        libs.androidx.espresso.core
+    )
+
+    androidTestImplementation(
+        libs.androidx.junit
+    )
+
+    debugImplementation(
+        libs.androidx.compose.ui.test.manifest
+    )
+
+    debugImplementation(
+        libs.androidx.compose.ui.tooling
+    )
 }
