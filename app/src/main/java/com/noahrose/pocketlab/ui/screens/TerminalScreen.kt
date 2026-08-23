@@ -5,12 +5,17 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -32,55 +37,96 @@ fun TerminalScreen(
     val uiState =
         terminalViewModel.uiState
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                MaterialTheme.colorScheme.background
-            )
-            .padding(16.dp),
-        verticalArrangement =
-            Arrangement.Top
+    val listState =
+        rememberLazyListState()
+
+    LaunchedEffect(
+        uiState.output.size
     ) {
 
-        uiState.output.forEach { line ->
-
-            Text(
-                text = line,
-                color =
-                    MaterialTheme.colorScheme.primary
-            )
-        }
-
-        Column(
-            modifier =
-                Modifier.fillMaxWidth()
+        if (
+            uiState.output.isNotEmpty()
         ) {
 
-            BasicTextField(
-                value =
-                    uiState.currentCommand,
+            listState.animateScrollToItem(
+                uiState.output.lastIndex
+            )
+        }
+    }
 
-                onValueChange = { value ->
+    Column(
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(
+                    MaterialTheme
+                        .colorScheme
+                        .background
+                )
+                .imePadding()
+                .padding(16.dp)
+    ) {
 
-                    if (
-                        value.contains("\n")
-                    ) {
+        LazyColumn(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
 
-                        terminalViewModel
-                            .executeCommand()
+            state =
+                listState,
 
-                    } else {
+            verticalArrangement =
+                Arrangement.spacedBy(
+                    2.dp
+                )
+        ) {
 
-                        terminalViewModel
-                            .updateCommand(
-                                value
-                            )
-                    }
-                },
+            items(
+                items =
+                    uiState.output
+            ) { line ->
 
-                modifier = Modifier
+                Text(
+                    text =
+                        line,
+
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .primary
+                )
+            }
+        }
+
+        BasicTextField(
+            value =
+                uiState.currentCommand,
+
+            onValueChange = { value ->
+
+                if (
+                    value.contains("\n")
+                ) {
+
+                    terminalViewModel
+                        .executeCommand()
+
+                } else {
+
+                    terminalViewModel
+                        .updateCommand(
+                            value
+                        )
+                }
+            },
+
+            modifier =
+                Modifier
                     .fillMaxWidth()
+                    .padding(
+                        top = 8.dp
+                    )
                     .onPreviewKeyEvent { keyEvent ->
 
                         if (
@@ -101,37 +147,43 @@ fun TerminalScreen(
                         }
                     },
 
-                keyboardOptions =
-                    KeyboardOptions(
-                        capitalization =
-                            KeyboardCapitalization.None,
-                        autoCorrectEnabled =
-                            false,
-                        keyboardType =
-                            KeyboardType.Ascii
-                    ),
+            keyboardOptions =
+                KeyboardOptions(
+                    capitalization =
+                        KeyboardCapitalization.None,
 
-                textStyle =
-                    TextStyle(
+                    autoCorrectEnabled =
+                        false,
+
+                    keyboardType =
+                        KeyboardType.Ascii
+                ),
+
+            textStyle =
+                TextStyle(
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .primary
+                ),
+
+            decorationBox = { innerTextField ->
+
+                Column {
+
+                    Text(
+                        text =
+                            "atlas@cyberdeck:~$ ",
+
                         color =
-                            MaterialTheme.colorScheme.primary
-                    ),
+                            MaterialTheme
+                                .colorScheme
+                                .primary
+                    )
 
-                decorationBox = { innerTextField ->
-
-                    Column {
-
-                        Text(
-                            text =
-                                "atlas@cyberdeck:~$ ",
-                            color =
-                                MaterialTheme.colorScheme.primary
-                        )
-
-                        innerTextField()
-                    }
+                    innerTextField()
                 }
-            )
-        }
+            }
+        )
     }
 }

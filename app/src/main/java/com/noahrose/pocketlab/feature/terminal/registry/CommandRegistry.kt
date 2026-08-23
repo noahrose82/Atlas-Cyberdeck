@@ -129,6 +129,13 @@ object CommandRegistry {
             ),
 
             CommandInfo(
+                name = "linux",
+                description = "Manage the Linux runtime session",
+                usage = "linux [status|start|stop]",
+                category = "Linux"
+            ),
+
+            CommandInfo(
                 name = "neofetch",
                 description = "Display Atlas Cyberdeck system information",
                 usage = "neofetch",

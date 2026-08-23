@@ -24,41 +24,80 @@ fun StatusCard(
     status: SystemStatus,
     modifier: Modifier = Modifier
 ) {
-    val statusColor = statusColor(status)
+
+    val statusColor =
+        statusColor(status)
 
     Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
+        modifier =
+            modifier.fillMaxWidth(),
+
+        colors =
+            CardDefaults.cardColors(
+                containerColor =
+                    MaterialTheme
+                        .colorScheme
+                        .surfaceContainer
+            )
     ) {
+
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp),
+
+            horizontalArrangement =
+                Arrangement.SpaceBetween
         ) {
+
             Column {
+
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+                    fontWeight =
+                        FontWeight.SemiBold
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(
+                    modifier =
+                        Modifier.height(8.dp)
+                )
 
                 Text(
-                    text = status.label.uppercase(),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = statusColor,
-                    fontWeight = FontWeight.Bold
+                    text =
+                        status
+                            .label
+                            .uppercase(),
+
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodyLarge,
+
+                    color =
+                        statusColor,
+
+                    fontWeight =
+                        FontWeight.Bold
                 )
             }
 
             Text(
-                text = status.symbol,
-                style = MaterialTheme.typography.headlineLarge,
-                color = statusColor
+                text =
+                    status.symbol,
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .headlineLarge,
+
+                color =
+                    statusColor
             )
         }
     }
@@ -68,23 +107,39 @@ fun StatusCard(
 private fun statusColor(
     status: SystemStatus
 ): Color {
+
     return when (status) {
+
         SystemStatus.ONLINE,
-        SystemStatus.READY -> {
-            MaterialTheme.colorScheme.primary
+        SystemStatus.READY,
+        SystemStatus.RUNNING -> {
+
+            MaterialTheme
+                .colorScheme
+                .primary
         }
 
         SystemStatus.INSTALLING -> {
-            MaterialTheme.colorScheme.tertiary
+
+            MaterialTheme
+                .colorScheme
+                .tertiary
         }
 
         SystemStatus.ERROR -> {
-            MaterialTheme.colorScheme.error
+
+            MaterialTheme
+                .colorScheme
+                .error
         }
 
+        SystemStatus.STOPPED,
         SystemStatus.OFFLINE,
         SystemStatus.NOT_INSTALLED -> {
-            MaterialTheme.colorScheme.onSurfaceVariant
+
+            MaterialTheme
+                .colorScheme
+                .onSurfaceVariant
         }
     }
 }

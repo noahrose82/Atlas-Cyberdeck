@@ -7,6 +7,9 @@ import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
 import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
 import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
+import com.noahrose.pocketlab.feature.terminal.function.ShellFunctionEngine
+import com.noahrose.pocketlab.feature.terminal.function.ShellFunctionParser
+import com.noahrose.pocketlab.feature.terminal.function.ShellFunctions
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.parsing.CommandTokenizer
 import com.noahrose.pocketlab.feature.terminal.pipe.PipeEngine
@@ -30,6 +33,90 @@ object TerminalCommandProcessor {
                 .resolve(command)
                 .trim()
 
+        /*
+         * Shell function definitions MUST be
+         * detected before variable expansion
+         * and sequential command parsing.
+         *
+         * Example:
+         *
+         * function status {
+         *     echo "Atlas Cyberdeck";
+         *     echo $MODE;
+         *     pwd
+         * }
+         *
+         * This preserves $MODE for execution
+         * time and prevents semicolons inside
+         * the body from being treated as
+         * top-level sequential commands.
+         */
+        if (
+            trimmedCommand.startsWith(
+                "function "
+            )
+        ) {
+
+            if (
+                recordHistory &&
+                trimmedCommand.isNotBlank()
+            ) {
+
+                CommandHistory.add(
+                    trimmedCommand
+                )
+            }
+
+            if (showPrompt) {
+
+                val currentPath =
+                    VirtualFileSystem
+                        .currentPath
+                        .value
+
+                output.add(
+                    "atlas@cyberdeck:$currentPath$ $trimmedCommand"
+                )
+            }
+
+            val definition =
+                ShellFunctionParser.parse(
+                    trimmedCommand
+                )
+
+            if (definition == null) {
+
+                ExecutionStatus.set(2)
+
+                output.add(
+                    "function: invalid definition"
+                )
+
+                return
+            }
+
+            val defined =
+                ShellFunctions.define(
+                    name = definition.name,
+                    commands = definition.commands
+                )
+
+            if (defined) {
+
+                ExecutionStatus.set(0)
+
+            } else {
+
+                ExecutionStatus.set(2)
+
+                output.add(
+                    "function: unable to define '${definition.name}'"
+                )
+            }
+
+            return
+        }
+
         val expandedCommand =
             WildcardExpander.expand(
                 VariableExpander.expand(
@@ -40,9 +127,6 @@ object TerminalCommandProcessor {
         /*
          * Store normal user-entered commands
          * in command history.
-         *
-         * History expansion commands themselves
-         * are not recorded.
          */
         if (
             recordHistory &&
@@ -56,15 +140,9 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Sequential command execution.
-         *
-         * Examples:
+         * Sequential execution.
          *
          * commandA ; commandB
-         * commandA ; commandB ; commandC
-         *
-         * Prompt visibility is propagated so
-         * silent scripts remain silent.
          */
         if (
             SequentialCommandEngine.execute(
@@ -83,15 +161,10 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Conditional command chaining.
-         *
-         * Examples:
+         * Conditional chaining.
          *
          * commandA && commandB
          * commandA || commandB
-         *
-         * Prompt visibility is propagated so
-         * silent scripts remain silent.
          */
         if (
             ConditionalChainEngine.execute(
@@ -110,7 +183,7 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Display the shell prompt.
+         * Display shell prompt.
          */
         if (showPrompt) {
 
@@ -127,13 +200,12 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Every command starts with success
-         * unless a handler reports failure.
+         * Commands begin with success status.
          */
         ExecutionStatus.set(0)
 
         /*
-         * Detect shell redirection.
+         * Detect redirection.
          */
         val redirection =
             RedirectionParser.parse(
@@ -173,6 +245,7 @@ object TerminalCommandProcessor {
                 )
 
             if (!handled) {
+
                 ExecutionStatus.set(1)
             }
 
@@ -243,7 +316,7 @@ object TerminalCommandProcessor {
         }
 
         /*
-         * Quote-aware command parsing.
+         * Quote-aware tokenization.
          */
         val tokens =
             CommandTokenizer.tokenizeOrNull(
@@ -273,11 +346,6 @@ object TerminalCommandProcessor {
         /*
          * cp and mv require individual
          * argument boundaries.
-         *
-         * Other handlers expect:
-         *
-         * parts[0] = command
-         * parts[1] = remaining argument text
          */
         val parts =
             when (commandName) {
@@ -321,6 +389,26 @@ object TerminalCommandProcessor {
         }
 
         /*
+         * Shell function execution.
+         *
+         * Function arguments will be added
+         * later in 052-03D.
+         */
+        if (
+            ShellFunctionEngine.execute(
+                name = commandName,
+                arguments = tokens.drop(1),
+                output = output,
+                showPrompt = showPrompt
+            )
+        ) {
+
+            ExecutionStatus.set(0)
+
+            return
+        }
+
+        /*
          * Normal command dispatch.
          */
         if (
@@ -338,9 +426,6 @@ object TerminalCommandProcessor {
          */
         when {
 
-            /*
-             * Repeat most recent command.
-             */
             commandName == "!!" -> {
 
                 val lastCommand =
@@ -369,10 +454,6 @@ object TerminalCommandProcessor {
                 }
             }
 
-            /*
-             * Execute by history number
-             * or command prefix.
-             */
             commandName.startsWith("!") -> {
 
                 val historyReference =

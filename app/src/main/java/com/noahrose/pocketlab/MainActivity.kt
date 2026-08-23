@@ -8,17 +8,34 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
+import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimePathManager
+import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
 import com.noahrose.pocketlab.ui.navigation.AtlasNavigation
 import com.noahrose.pocketlab.ui.screens.AtlasSplashScreen
 import com.noahrose.pocketlab.ui.theme.PocketLabTheme
 import kotlinx.coroutines.delay
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(
         savedInstanceState: Bundle?
     ) {
-        super.onCreate(savedInstanceState)
+
+        super.onCreate(
+            savedInstanceState
+        )
+
+        LinuxRepository.initialize(
+            applicationContext
+        )
+
+        LinuxRuntimePathManager.initialize(
+            applicationContext
+        )
+
+        LinuxRuntimeFilesystemManager.prepare()
 
         setContent {
 
@@ -33,7 +50,7 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
 
                 delay(
-                    1800L
+                    1800.milliseconds
                 )
 
                 showSplash = false
@@ -51,7 +68,9 @@ class MainActivity : ComponentActivity() {
                 } else {
 
                     AtlasNavigation(
-                        darkModeEnabled = darkModeEnabled,
+                        darkModeEnabled =
+                            darkModeEnabled,
+
                         onDarkModeChanged = {
                             darkModeEnabled = it
                         }
