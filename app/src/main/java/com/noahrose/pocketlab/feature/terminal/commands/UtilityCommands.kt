@@ -9,6 +9,7 @@ import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeAssetValidator
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemResult
+import com.noahrose.pocketlab.feature.linux.runtime.integrity.LinuxNativeRuntimeIntegrityValidator
 import com.noahrose.pocketlab.feature.linux.runtime.platform.LinuxRuntimeAbiDetector
 import com.noahrose.pocketlab.feature.linux.runtime.provision.LinuxRuntimeBinarySelector
 import com.noahrose.pocketlab.feature.system.DeviceInfoProvider
@@ -458,6 +459,15 @@ object UtilityCommands : CommandHandler {
                         ?.assetName
                         ?: "UNAVAILABLE"
 
+                val runtimeIntegrity =
+                    LinuxNativeRuntimeIntegrityValidator
+                        .validate()
+
+                val runtimeIntegrityStatus =
+                    runtimeIntegrity
+                        .status
+                        .label
+
                 val runtimeSourceStatus =
                     runtimeBinary
                         ?.source
@@ -494,6 +504,10 @@ object UtilityCommands : CommandHandler {
 
                 output.add(
                     "Runtime Binary   : $runtimeBinaryStatus"
+                )
+
+                output.add(
+                    "Runtime Integrity: $runtimeIntegrityStatus"
                 )
 
                 output.add(
@@ -544,6 +558,17 @@ object UtilityCommands : CommandHandler {
                     )
                 }
 
+                if (
+                    runtimeIntegrity.message != null
+                ) {
+
+                    output.add("")
+
+                    output.add(
+                        "Integrity Error : ${runtimeIntegrity.message}"
+                    )
+                }
+
                 output.add("")
 
                 output.add(
@@ -561,12 +586,19 @@ object UtilityCommands : CommandHandler {
                 output.add("")
 
                 val overallStatus =
-                    when (filesystemResult) {
+                    when {
 
-                        is LinuxRuntimeFilesystemResult.Failure ->
+                        filesystemResult is
+                                LinuxRuntimeFilesystemResult.Failure ->
+
+                            "DEGRADED"
+
+                        runtimeIntegrity.message != null ->
+
                             "DEGRADED"
 
                         else ->
+
                             "HEALTHY"
                     }
 
