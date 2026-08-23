@@ -6,12 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.noahrose.pocketlab.feature.linux.model.LinuxInstallation
 import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
+import com.noahrose.pocketlab.feature.linux.rootfs.provision.LinuxRootfsProvisionManager
+import com.noahrose.pocketlab.feature.linux.rootfs.provision.LinuxRootfsProvisionResult
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
 import com.noahrose.pocketlab.feature.system.bootstrap.DeviceBootstrapManager
 import com.noahrose.pocketlab.feature.system.capability.AtlasFeature
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.milliseconds
 
 class LinuxViewModel : ViewModel() {
 
@@ -59,8 +59,12 @@ class LinuxViewModel : ViewModel() {
             LinuxRepository
                 .updateInstallation(
                     current.copy(
-                        isInstalling = false,
-                        installationProgress = 0f,
+                        isInstalling =
+                            false,
+
+                        installationProgress =
+                            0f,
+
                         installationStep =
                             _blockedReason.value
                                 ?: "Linux is not available on this device."
@@ -86,61 +90,55 @@ class LinuxViewModel : ViewModel() {
 
             refreshInstallation()
 
-            updateInstallation(
-                progress = 0.20f,
-                step = "Preparing installation..."
-            )
+            when (
+                val result =
+                    LinuxRootfsProvisionManager
+                        .provision { progress, step ->
 
-            delay(
-                800.milliseconds
-            )
+                            updateInstallation(
+                                progress =
+                                    progress,
 
-            updateInstallation(
-                progress = 0.40f,
-                step = "Downloading packages..."
-            )
+                                step =
+                                    step
+                            )
+                        }
+            ) {
 
-            delay(
-                1000.milliseconds
-            )
+                LinuxRootfsProvisionResult.Success -> {
 
-            updateInstallation(
-                progress = 0.65f,
-                step = "Installing packages..."
-            )
+                    updateInstallation(
+                        progress =
+                            1f,
 
-            delay(
-                1200.milliseconds
-            )
+                        step =
+                            "Ubuntu installation complete."
+                    )
 
-            updateInstallation(
-                progress = 0.85f,
-                step = "Configuring system..."
-            )
+                    LinuxRepository
+                        .completeInstallation()
 
-            delay(
-                900.milliseconds
-            )
+                    refreshInstallation()
+                }
 
-            updateInstallation(
-                progress = 0.95f,
-                step = "Cleaning up..."
-            )
+                is LinuxRootfsProvisionResult.Failure -> {
 
-            delay(
-                700.milliseconds
-            )
-
-            LinuxRepository
-                .completeInstallation()
-
-            refreshInstallation()
+                    failInstallation(
+                        message =
+                            result.message
+                    )
+                }
+            }
         }
     }
 
     fun startLinux() {
 
         refreshFeatureGate()
+
+        if (!_linuxAvailable.value) {
+            return
+        }
 
         LinuxRuntimeController
             .start()
@@ -161,6 +159,9 @@ class LinuxViewModel : ViewModel() {
         if (_installation.value.isInstalling) {
             return
         }
+
+        LinuxRuntimeController
+            .stop()
 
         LinuxRepository
             .removeLinux()
@@ -193,9 +194,12 @@ class LinuxViewModel : ViewModel() {
             LinuxRepository
                 .getInstallation()
                 .copy(
-                    isInstalling = true,
+                    isInstalling =
+                        true,
+
                     installationProgress =
                         progress,
+
                     installationStep =
                         step
                 )
@@ -203,6 +207,37 @@ class LinuxViewModel : ViewModel() {
         LinuxRepository
             .updateInstallation(
                 updatedInstallation
+            )
+
+        refreshInstallation()
+    }
+
+    private fun failInstallation(
+        message: String
+    ) {
+
+        val current =
+            LinuxRepository
+                .getInstallation()
+
+        LinuxRepository
+            .updateInstallation(
+                current.copy(
+                    installed =
+                        false,
+
+                    running =
+                        false,
+
+                    isInstalling =
+                        false,
+
+                    installationProgress =
+                        0f,
+
+                    installationStep =
+                        message
+                )
             )
 
         refreshInstallation()

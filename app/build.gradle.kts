@@ -119,6 +119,10 @@ dependencies {
         "androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7"
     )
 
+    implementation(
+        "org.apache.commons:commons-compress:1.28.0"
+    )
+
     testImplementation(
         "junit:junit:4.13.2"
     )

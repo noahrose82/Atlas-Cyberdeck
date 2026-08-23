@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
+import com.noahrose.pocketlab.feature.linux.rootfs.filesystem.LinuxRootfsStagingManager
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimePathManager
 import com.noahrose.pocketlab.feature.linux.runtime.platform.LinuxNativeRuntimeResolver
@@ -48,8 +49,13 @@ class MainActivity : ComponentActivity() {
         LinuxRuntimeFilesystemManager.prepare()
 
         /*
+         * Prepare Ubuntu rootfs archive staging storage.
+         */
+        LinuxRootfsStagingManager.prepare()
+
+        /*
          * Resolve native runtime executables installed
-         * from the signed APK.
+         * from the signed Atlas APK.
          */
         LinuxNativeRuntimeResolver.initialize(
             applicationContext

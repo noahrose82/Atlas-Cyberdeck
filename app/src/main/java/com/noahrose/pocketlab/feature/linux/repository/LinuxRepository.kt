@@ -36,14 +36,19 @@ object LinuxRepository {
         LinuxInstallation(
             distribution =
                 LinuxDistribution.UBUNTU,
+
             version =
                 "24.04 LTS",
+
             installed =
                 false,
+
             running =
                 false,
+
             packageCount =
                 0,
+
             storageUsedMb =
                 0L
         )
@@ -71,8 +76,11 @@ object LinuxRepository {
         restoreInstallation()
     }
 
-    fun getInstallation(): LinuxInstallation =
-        _installation.value
+    fun getInstallation():
+            LinuxInstallation {
+
+        return _installation.value
+    }
 
     fun updateInstallation(
         updated: LinuxInstallation
@@ -81,24 +89,42 @@ object LinuxRepository {
         _installation.value =
             updated
 
+        /*
+         * Only durable installation metadata is
+         * written by persistInstallation().
+         *
+         * Runtime and installation-progress state
+         * remain session-only.
+         */
         persistInstallation()
     }
 
     fun startInstallation() {
 
+        val current =
+            _installation.value
+
+        if (
+            current.isInstalling ||
+            current.installed
+        ) {
+            return
+        }
+
         _installation.value =
-            _installation
-                .value
-                .copy(
-                    running =
-                        false,
-                    isInstalling =
-                        true,
-                    installationProgress =
-                        0f,
-                    installationStep =
-                        "Preparing installation..."
-                )
+            current.copy(
+                running =
+                    false,
+
+                isInstalling =
+                    true,
+
+                installationProgress =
+                    0f,
+
+                installationStep =
+                    "Preparing installation..."
+            )
     }
 
     fun completeInstallation() {
@@ -109,16 +135,30 @@ object LinuxRepository {
                 .copy(
                     installed =
                         true,
+
                     running =
                         false,
+
+                    /*
+                     * Package count and storage usage
+                     * are no longer simulated.
+                     *
+                     * Real metrics can be populated
+                     * later from the provisioned
+                     * Ubuntu environment.
+                     */
                     packageCount =
-                        125,
+                        0,
+
                     storageUsedMb =
-                        1850L,
+                        0L,
+
                     isInstalling =
                         false,
+
                     installationProgress =
                         1f,
+
                     installationStep =
                         "Installation complete"
                 )
@@ -129,8 +169,8 @@ object LinuxRepository {
     /*
      * Starts the installed Linux runtime.
      *
-     * Running state is intentionally session-only
-     * and is not written to persistent storage.
+     * Runtime state is deliberately session-only
+     * and is never persisted.
      */
     fun startLinux() {
 
@@ -182,16 +222,22 @@ object LinuxRepository {
                 .copy(
                     installed =
                         false,
+
                     running =
                         false,
+
                     packageCount =
                         0,
+
                     storageUsedMb =
                         0L,
+
                     isInstalling =
                         false,
+
                     installationProgress =
                         0f,
+
                     installationStep =
                         "Ready"
                 )
@@ -240,24 +286,22 @@ object LinuxRepository {
             )
                 ?: "24.04 LTS"
 
+        /*
+         * No simulated fallback values.
+         *
+         * If real metrics have never been recorded,
+         * Atlas correctly restores them as zero.
+         */
         val packageCount =
             prefs.getInt(
                 KEY_PACKAGE_COUNT,
-                if (installed) {
-                    125
-                } else {
-                    0
-                }
+                0
             )
 
         val storageUsedMb =
             prefs.getLong(
                 KEY_STORAGE_USED_MB,
-                if (installed) {
-                    1850L
-                } else {
-                    0L
-                }
+                0L
             )
 
         _installation.value =
@@ -265,8 +309,10 @@ object LinuxRepository {
                 .copy(
                     distribution =
                         distribution,
+
                     version =
                         version,
+
                     installed =
                         installed,
 
@@ -279,16 +325,20 @@ object LinuxRepository {
 
                     packageCount =
                         packageCount,
+
                     storageUsedMb =
                         storageUsedMb,
+
                     isInstalling =
                         false,
+
                     installationProgress =
                         if (installed) {
                             1f
                         } else {
                             0f
                         },
+
                     installationStep =
                         if (installed) {
                             "Installation complete"
@@ -299,8 +349,14 @@ object LinuxRepository {
     }
 
     /*
-     * Only durable installation metadata is saved.
-     * Runtime state is deliberately excluded.
+     * Persist only durable installation metadata.
+     *
+     * Excluded intentionally:
+     *
+     * running
+     * isInstalling
+     * installationProgress
+     * installationStep
      */
     private fun persistInstallation() {
 

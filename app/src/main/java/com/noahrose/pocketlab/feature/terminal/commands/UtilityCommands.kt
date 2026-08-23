@@ -4,8 +4,12 @@ import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.linux.model.LinuxRuntimeStatus
 import com.noahrose.pocketlab.feature.linux.model.runtimeStatus
 import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
-import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
+import com.noahrose.pocketlab.feature.linux.rootfs.filesystem.LinuxRootfsStagingManager
+import com.noahrose.pocketlab.feature.linux.rootfs.filesystem.LinuxRootfsStagingResult
+import com.noahrose.pocketlab.feature.linux.rootfs.integrity.LinuxRootfsIntegrityValidator
+import com.noahrose.pocketlab.feature.linux.rootfs.provision.LinuxRootfsSelector
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
+import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeAssetValidator
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemResult
@@ -325,6 +329,7 @@ object UtilityCommands : CommandHandler {
                 ScriptEngine.execute(
                     script =
                         scriptContent.lines(),
+
                     output =
                         output
                 )
@@ -476,6 +481,48 @@ object UtilityCommands : CommandHandler {
                         }
                         ?: "UNAVAILABLE"
 
+                val rootfs =
+                    LinuxRootfsSelector
+                        .getPreferredRootfs()
+
+                val rootfsStatus =
+                    rootfs
+                        ?.let { descriptor ->
+                            "${descriptor.distribution} ${descriptor.release}"
+                        }
+                        ?: "UNAVAILABLE"
+
+                val rootfsArchiveStatus =
+                    rootfs
+                        ?.archiveName
+                        ?: "UNAVAILABLE"
+
+                val rootfsStagingResult =
+                    LinuxRootfsStagingManager
+                        .getLastPreparationResult()
+
+                val rootfsStagingStatus =
+                    when (rootfsStagingResult) {
+
+                        LinuxRootfsStagingResult.Ready ->
+                            "READY"
+
+                        is LinuxRootfsStagingResult.Failure ->
+                            "FAILED"
+
+                        null ->
+                            "NOT PREPARED"
+                    }
+
+                val rootfsIntegrity =
+                    LinuxRootfsIntegrityValidator
+                        .validate()
+
+                val rootfsIntegrityStatus =
+                    rootfsIntegrity
+                        .status
+                        .label
+
                 output.add(
                     "Atlas Cyberdeck Diagnostics"
                 )
@@ -512,6 +559,22 @@ object UtilityCommands : CommandHandler {
 
                 output.add(
                     "Runtime Source   : $runtimeSourceStatus"
+                )
+
+                output.add(
+                    "Rootfs Source    : $rootfsStatus"
+                )
+
+                output.add(
+                    "Rootfs Archive   : $rootfsArchiveStatus"
+                )
+
+                output.add(
+                    "Rootfs Staging   : $rootfsStagingStatus"
+                )
+
+                output.add(
+                    "Rootfs Integrity : $rootfsIntegrityStatus"
                 )
 
                 output.add(
@@ -569,6 +632,29 @@ object UtilityCommands : CommandHandler {
                     )
                 }
 
+                if (
+                    rootfsStagingResult is
+                            LinuxRootfsStagingResult.Failure
+                ) {
+
+                    output.add("")
+
+                    output.add(
+                        "Rootfs Error    : ${rootfsStagingResult.message}"
+                    )
+                }
+
+                if (
+                    rootfsIntegrity.message != null
+                ) {
+
+                    output.add("")
+
+                    output.add(
+                        "Rootfs Integrity Error : ${rootfsIntegrity.message}"
+                    )
+                }
+
                 output.add("")
 
                 output.add(
@@ -594,6 +680,15 @@ object UtilityCommands : CommandHandler {
                             "DEGRADED"
 
                         runtimeIntegrity.message != null ->
+
+                            "DEGRADED"
+
+                        rootfsStagingResult is
+                                LinuxRootfsStagingResult.Failure ->
+
+                            "DEGRADED"
+
+                        rootfsIntegrity.message != null ->
 
                             "DEGRADED"
 
