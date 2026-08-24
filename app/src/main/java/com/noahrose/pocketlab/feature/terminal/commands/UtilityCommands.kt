@@ -11,6 +11,7 @@ import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
 import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandExecutor
 import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandResult
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeAssetValidator
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemResult
@@ -40,11 +41,6 @@ object UtilityCommands :
 
         when (commandName) {
 
-            /*
-             * ------------------------------------------------
-             * HELP
-             * ------------------------------------------------
-             */
             "help" -> {
 
                 output.add(
@@ -90,18 +86,15 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * SYSTEM INFORMATION
-             * ------------------------------------------------
-             */
             "sysinfo" -> {
 
                 val profile =
                     DeviceInfoProvider
                         .getProfile()
 
-                if (profile == null) {
+                if (
+                    profile == null
+                ) {
 
                     output.add(
                         "sysinfo: device information unavailable"
@@ -124,18 +117,15 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * DEVICE COMPATIBILITY
-             * ------------------------------------------------
-             */
             "compatibility" -> {
 
                 val profile =
                     DeviceBootstrapManager
                         .getProfile()
 
-                if (profile == null) {
+                if (
+                    profile == null
+                ) {
 
                     output.add(
                         "compatibility: device profile unavailable"
@@ -164,11 +154,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * DEVICE PROFILE
-             * ------------------------------------------------
-             */
             "deviceprofile" -> {
 
                 val action =
@@ -216,7 +201,9 @@ object UtilityCommands :
                             DeviceBootstrapManager
                                 .getProfile()
 
-                        if (profile == null) {
+                        if (
+                            profile == null
+                        ) {
 
                             output.add(
                                 "Profile      : unavailable"
@@ -306,11 +293,6 @@ object UtilityCommands :
                 }
             }
 
-            /*
-             * ------------------------------------------------
-             * ATLAS SCRIPT ENGINE
-             * ------------------------------------------------
-             */
             "runscript" -> {
 
                 if (
@@ -349,7 +331,9 @@ object UtilityCommands :
                             scriptName
                         )
 
-                if (scriptContent == null) {
+                if (
+                    scriptContent == null
+                ) {
 
                     output.add(
                         "runscript: '$scriptName': Script not found"
@@ -374,11 +358,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * PLUGINS
-             * ------------------------------------------------
-             */
             "plugins" -> {
 
                 output.add(
@@ -417,11 +396,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * VERSION
-             * ------------------------------------------------
-             */
             "version" -> {
 
                 output.add(
@@ -447,18 +421,8 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * DIAGNOSTICS
-             * ------------------------------------------------
-             */
             "diagnostics" -> {
 
-                /*
-                 * Keep the actual native runtime and
-                 * repository state synchronized before
-                 * displaying diagnostics.
-                 */
                 LinuxRuntimeController
                     .getSession()
 
@@ -486,15 +450,14 @@ object UtilityCommands :
                         .runtimeStatus()
                         .label
 
-                /*
-                 * Runtime filesystem.
-                 */
                 val filesystemResult =
                     LinuxRuntimeFilesystemManager
                         .getLastPreparationResult()
 
                 val runtimeStorageStatus =
-                    when (filesystemResult) {
+                    when (
+                        filesystemResult
+                    ) {
 
                         LinuxRuntimeFilesystemResult.Ready ->
                             "READY"
@@ -506,17 +469,11 @@ object UtilityCommands :
                             "NOT PREPARED"
                     }
 
-                /*
-                 * Runtime assets.
-                 */
                 val runtimeAssetStatus =
                     LinuxRuntimeAssetValidator
                         .getStatus()
                         .label
 
-                /*
-                 * Runtime ABI.
-                 */
                 val runtimeAbi =
                     LinuxRuntimeAbiDetector
                         .getPreferredAbi()
@@ -529,12 +486,6 @@ object UtilityCommands :
                         }
                         ?: "UNSUPPORTED"
 
-                /*
-                 * Runtime binary descriptor.
-                 *
-                 * ARM64 is currently the fully
-                 * provisioned Atlas runtime target.
-                 */
                 val runtimeBinaryStatus =
                     when (
                         runtimeAbi
@@ -557,16 +508,10 @@ object UtilityCommands :
                             "UNAVAILABLE"
                     }
 
-                /*
-                 * Native PRoot integrity.
-                 */
                 val runtimeIntegrity =
                     LinuxNativeRuntimeIntegrityValidator
                         .validate()
 
-                /*
-                 * Rootfs staging.
-                 */
                 val rootfsStagingResult =
                     LinuxRootfsStagingManager
                         .getLastPreparationResult()
@@ -586,17 +531,10 @@ object UtilityCommands :
                             "NOT PREPARED"
                     }
 
-                /*
-                 * Trusted Ubuntu archive integrity.
-                 */
                 val rootfsIntegrity =
                     LinuxRootfsIntegrityValidator
                         .validate()
 
-                /*
-                 * Current trusted ARM64 rootfs
-                 * provenance.
-                 */
                 val rootfsSourceStatus =
                     when (
                         runtimeAbi
@@ -721,11 +659,6 @@ object UtilityCommands :
                     }"
                 )
 
-                /*
-                 * Detailed error reporting only appears
-                 * when a subsystem has a concrete
-                 * diagnostic message.
-                 */
                 if (
                     filesystemResult is
                             LinuxRuntimeFilesystemResult.Failure
@@ -832,11 +765,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * HISTORY
-             * ------------------------------------------------
-             */
             "history" -> {
 
                 val history =
@@ -867,11 +795,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * CLEAR
-             * ------------------------------------------------
-             */
             "clear" -> {
 
                 output.clear()
@@ -879,11 +802,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * ATLAS IDENTITY
-             * ------------------------------------------------
-             */
             "whoami" -> {
 
                 output.add(
@@ -893,11 +811,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * ATLAS WORKING DIRECTORY
-             * ------------------------------------------------
-             */
             "pwd" -> {
 
                 output.add(
@@ -913,11 +826,6 @@ object UtilityCommands :
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * ATLAS STATUS
-             * ------------------------------------------------
-             */
             "status" -> {
 
                 LinuxRuntimeController
@@ -962,37 +870,45 @@ object UtilityCommands :
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * LINUX
+             * ------------------------------------------------
+             */
             "linux" -> {
 
                 /*
-                 * Reconstruct everything after "linux".
-                 *
-                 * Atlas Terminal may deliver arguments as:
+                 * TerminalCommandProcessor currently
+                 * supplies most handlers as:
                  *
                  * [linux, "exec whoami"]
                  *
-                 * or:
-                 *
-                 * [linux, exec, whoami]
-                 *
-                 * Reconstructing the tail makes this handler
-                 * compatible with both representations.
+                 * Reconstructing the tail supports
+                 * both grouped and tokenized inputs.
                  */
                 val rawArguments =
                     parts
-                        .drop(1)
-                        .joinToString(" ")
+                        .drop(
+                            1
+                        )
+                        .joinToString(
+                            " "
+                        )
                         .trim()
 
                 val action =
-                    if (rawArguments.isBlank()) {
+                    if (
+                        rawArguments.isBlank()
+                    ) {
 
                         "status"
 
                     } else {
 
                         rawArguments
-                            .substringBefore(" ")
+                            .substringBefore(
+                                " "
+                            )
                             .trim()
                             .lowercase()
                     }
@@ -1007,11 +923,6 @@ object UtilityCommands :
 
                 when (action) {
 
-                    /*
-                     * ----------------------------------------
-                     * STATUS
-                     * ----------------------------------------
-                     */
                     "status" -> {
 
                         LinuxRuntimeController
@@ -1022,15 +933,21 @@ object UtilityCommands :
                                 .getInstallation()
 
                         val installationStatus =
-                            if (installation.installed) {
+                            if (
+                                installation.installed
+                            ) {
+
                                 "INSTALLED"
+
                             } else {
+
                                 "NOT INSTALLED"
                             }
 
                         val runtimeStatus =
                             when (
-                                installation.runtimeStatus()
+                                installation
+                                    .runtimeStatus()
                             ) {
 
                                 LinuxRuntimeStatus.NOT_INSTALLED ->
@@ -1048,7 +965,9 @@ object UtilityCommands :
                                 .name
                                 .lowercase()
                                 .replaceFirstChar { character ->
-                                    character.uppercase()
+
+                                    character
+                                        .uppercase()
                                 }
 
                         output.add(
@@ -1074,11 +993,6 @@ object UtilityCommands :
                         return true
                     }
 
-                    /*
-                     * ----------------------------------------
-                     * START
-                     * ----------------------------------------
-                     */
                     "start" -> {
 
                         when (
@@ -1136,12 +1050,16 @@ object UtilityCommands :
                         return true
                     }
 
-                    /*
-                     * ----------------------------------------
-                     * STOP
-                     * ----------------------------------------
-                     */
                     "stop" -> {
+
+                        if (
+                            LinuxShellMode
+                                .isActive()
+                        ) {
+
+                            LinuxShellMode
+                                .exit()
+                        }
 
                         when (
                             LinuxRuntimeController
@@ -1181,21 +1099,90 @@ object UtilityCommands :
                     }
 
                     /*
-                     * ----------------------------------------
-                     * REAL UBUNTU COMMAND BRIDGE
-                     *
-                     * linux exec whoami
-                     * linux exec pwd
-                     * linux exec uname -m
-                     * linux exec cat /etc/os-release
-                     * ----------------------------------------
+                     * ------------------------------------------------
+                     * INTERACTIVE-LIKE UBUNTU SHELL MODE
+                     * ------------------------------------------------
+                     */
+                    "shell" -> {
+
+                        val installation =
+                            LinuxRepository
+                                .getInstallation()
+
+                        if (
+                            !installation.installed
+                        ) {
+
+                            output.add(
+                                "linux: Ubuntu is not installed."
+                            )
+
+                            return true
+                        }
+
+                        if (
+                            !installation.running
+                        ) {
+
+                            output.add(
+                                "linux: Ubuntu runtime is not running."
+                            )
+
+                            output.add(
+                                "Start it with: linux start"
+                            )
+
+                            return true
+                        }
+
+                        if (
+                            LinuxShellMode
+                                .isActive()
+                        ) {
+
+                            output.add(
+                                "Ubuntu shell mode is already active."
+                            )
+
+                            return true
+                        }
+
+                        if (
+                            LinuxShellMode
+                                .enter()
+                        ) {
+
+                            output.add(
+                                "Ubuntu shell mode enabled."
+                            )
+
+                            output.add(
+                                "Type 'exit' to return to Atlas."
+                            )
+
+                        } else {
+
+                            output.add(
+                                "linux: unable to enter Ubuntu shell."
+                            )
+                        }
+
+                        return true
+                    }
+
+                    /*
+                     * ------------------------------------------------
+                     * ONE-SHOT UBUNTU COMMAND
+                     * ------------------------------------------------
                      */
                     "exec" -> {
 
                         val command =
                             actionArguments
 
-                        if (command.isBlank()) {
+                        if (
+                            command.isBlank()
+                        ) {
 
                             output.add(
                                 "Usage: linux exec <command>"
@@ -1208,7 +1195,9 @@ object UtilityCommands :
                             LinuxRepository
                                 .getInstallation()
 
-                        if (!installation.installed) {
+                        if (
+                            !installation.installed
+                        ) {
 
                             output.add(
                                 "linux: Ubuntu is not installed."
@@ -1217,7 +1206,9 @@ object UtilityCommands :
                             return true
                         }
 
-                        if (!installation.running) {
+                        if (
+                            !installation.running
+                        ) {
 
                             output.add(
                                 "linux: Ubuntu runtime is not running."
@@ -1321,15 +1312,10 @@ object UtilityCommands :
                         return true
                     }
 
-                    /*
-                     * ----------------------------------------
-                     * UNKNOWN ACTION
-                     * ----------------------------------------
-                     */
                     else -> {
 
                         output.add(
-                            "Usage: linux [status|start|stop|exec]"
+                            "Usage: linux [status|start|stop|shell|exec]"
                         )
 
                         output.add(
@@ -1340,11 +1326,7 @@ object UtilityCommands :
                     }
                 }
             }
-            /*
-             * ------------------------------------------------
-             * NEOFETCH
-             * ------------------------------------------------
-             */
+
             "neofetch" -> {
 
                 LinuxRuntimeController

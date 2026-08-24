@@ -1,6 +1,8 @@
 package com.noahrose.pocketlab.feature.terminal
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandResult
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
 import com.noahrose.pocketlab.feature.terminal.alias.CommandAliases
 import com.noahrose.pocketlab.feature.terminal.chaining.ConditionalChainEngine
 import com.noahrose.pocketlab.feature.terminal.commands.TextCommands
@@ -8,8 +10,6 @@ import com.noahrose.pocketlab.feature.terminal.dispatch.CommandDispatcher
 import com.noahrose.pocketlab.feature.terminal.environment.VariableExpander
 import com.noahrose.pocketlab.feature.terminal.execution.ExecutionStatus
 import com.noahrose.pocketlab.feature.terminal.function.ShellFunctionEngine
-import com.noahrose.pocketlab.feature.terminal.function.ShellFunctionParser
-import com.noahrose.pocketlab.feature.terminal.function.ShellFunctions
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.parsing.CommandTokenizer
 import com.noahrose.pocketlab.feature.terminal.pipe.PipeEngine
@@ -28,94 +28,190 @@ object TerminalCommandProcessor {
         showPrompt: Boolean = true
     ) {
 
-        val trimmedCommand =
-            CommandAliases
-                .resolve(command)
-                .trim()
-
         /*
-         * Shell function definitions MUST be
-         * detected before variable expansion
-         * and sequential command parsing.
+         * ------------------------------------------------
+         * REAL UBUNTU SHELL MODE
+         * ------------------------------------------------
          *
-         * Example:
+         * This must run before the Atlas parser.
          *
-         * function status {
-         *     echo "Atlas Cyberdeck";
-         *     echo $MODE;
-         *     pwd
-         * }
+         * Ubuntu commands must receive their own:
          *
-         * This preserves $MODE for execution
-         * time and prevents semicolons inside
-         * the body from being treated as
-         * top-level sequential commands.
+         * variables
+         * pipes
+         * redirection
+         * &&
+         * ||
+         * wildcards
+         * quoting
+         *
+         * without Atlas rewriting them first.
          */
         if (
-            trimmedCommand.startsWith(
-                "function "
-            )
+            LinuxShellMode
+                .isActive()
         ) {
+
+            val guestCommand =
+                command.trim()
 
             if (
                 recordHistory &&
-                trimmedCommand.isNotBlank()
+                guestCommand.isNotBlank()
             ) {
 
-                CommandHistory.add(
-                    trimmedCommand
-                )
+                CommandHistory
+                    .add(
+                        guestCommand
+                    )
             }
 
             if (showPrompt) {
 
-                val currentPath =
-                    VirtualFileSystem
-                        .currentPath
-                        .value
-
                 output.add(
-                    "atlas@cyberdeck:$currentPath$ $trimmedCommand"
+                    "${LinuxShellMode.getPrompt()} $guestCommand"
                 )
             }
 
-            val definition =
-                ShellFunctionParser.parse(
-                    trimmedCommand
+            if (
+                guestCommand.isBlank()
+            ) {
+
+                return
+            }
+
+            /*
+             * "exit" switches back to Atlas.
+             *
+             * It intentionally does NOT get sent
+             * to Ubuntu because that would kill
+             * the persistent guest shell process.
+             */
+            if (
+                guestCommand.equals(
+                    "exit",
+                    ignoreCase = true
                 )
+            ) {
 
-            if (definition == null) {
+                LinuxShellMode
+                    .exit()
 
-                ExecutionStatus.set(2)
+                ExecutionStatus
+                    .set(
+                        0
+                    )
 
                 output.add(
-                    "function: invalid definition"
+                    "Returned to Atlas shell."
                 )
 
                 return
             }
 
-            val defined =
-                ShellFunctions.define(
-                    name = definition.name,
-                    commands = definition.commands
-                )
+            when (
+                val result =
+                    LinuxShellMode
+                        .execute(
+                            guestCommand
+                        )
+            ) {
 
-            if (defined) {
+                is LinuxGuestCommandResult.Success -> {
 
-                ExecutionStatus.set(0)
+                    ExecutionStatus
+                        .set(
+                            result.exitCode
+                        )
 
-            } else {
+                    if (
+                        result.output
+                            .isNotBlank()
+                    ) {
 
-                ExecutionStatus.set(2)
+                        result.output
+                            .lines()
+                            .forEach { line ->
 
-                output.add(
-                    "function: unable to define '${definition.name}'"
-                )
+                                output.add(
+                                    line
+                                )
+                            }
+                    }
+
+                    if (
+                        result.errorOutput
+                            .isNotBlank()
+                    ) {
+
+                        result.errorOutput
+                            .lines()
+                            .forEach { line ->
+
+                                output.add(
+                                    line
+                                )
+                            }
+                    }
+                }
+
+                is LinuxGuestCommandResult.Failure -> {
+
+                    ExecutionStatus
+                        .set(
+                            1
+                        )
+
+                    output.add(
+                        "linux: ${result.message}"
+                    )
+
+                    if (
+                        result.output
+                            .isNotBlank()
+                    ) {
+
+                        result.output
+                            .lines()
+                            .forEach { line ->
+
+                                output.add(
+                                    line
+                                )
+                            }
+                    }
+
+                    if (
+                        result.errorOutput
+                            .isNotBlank()
+                    ) {
+
+                        result.errorOutput
+                            .lines()
+                            .forEach { line ->
+
+                                output.add(
+                                    line
+                                )
+                            }
+                    }
+                }
             }
 
             return
         }
+
+        /*
+         * ------------------------------------------------
+         * ATLAS SHELL
+         * ------------------------------------------------
+         */
+        val trimmedCommand =
+            CommandAliases
+                .resolve(
+                    command
+                )
+                .trim()
 
         val expandedCommand =
             WildcardExpander.expand(
@@ -125,8 +221,7 @@ object TerminalCommandProcessor {
             )
 
         /*
-         * Store normal user-entered commands
-         * in command history.
+         * Store normal user commands.
          */
         if (
             recordHistory &&
@@ -146,17 +241,26 @@ object TerminalCommandProcessor {
          */
         if (
             SequentialCommandEngine.execute(
-                command = expandedCommand
+                command =
+                    expandedCommand
             ) { sequentialCommand ->
 
                 process(
-                    command = sequentialCommand,
-                    output = output,
-                    recordHistory = false,
-                    showPrompt = showPrompt
+                    command =
+                        sequentialCommand,
+
+                    output =
+                        output,
+
+                    recordHistory =
+                        false,
+
+                    showPrompt =
+                        showPrompt
                 )
             }
         ) {
+
             return
         }
 
@@ -168,49 +272,68 @@ object TerminalCommandProcessor {
          */
         if (
             ConditionalChainEngine.execute(
-                command = expandedCommand
+                command =
+                    expandedCommand
             ) { chainedCommand ->
 
                 process(
-                    command = chainedCommand,
-                    output = output,
-                    recordHistory = false,
-                    showPrompt = showPrompt
+                    command =
+                        chainedCommand,
+
+                    output =
+                        output,
+
+                    recordHistory =
+                        false,
+
+                    showPrompt =
+                        showPrompt
                 )
             }
         ) {
+
             return
         }
 
         /*
-         * Display shell prompt.
+         * Atlas prompt.
          */
         if (showPrompt) {
 
             val currentPath =
-                VirtualFileSystem.currentPath.value
+                VirtualFileSystem
+                    .currentPath
+                    .value
 
             output.add(
                 "atlas@cyberdeck:$currentPath$ $trimmedCommand"
             )
         }
 
-        if (trimmedCommand.isBlank()) {
+        if (
+            trimmedCommand.isBlank()
+        ) {
+
             return
         }
 
         /*
-         * Commands begin with success status.
+         * Commands begin successful unless a
+         * handler reports otherwise.
          */
-        ExecutionStatus.set(0)
+        ExecutionStatus
+            .set(
+                0
+            )
 
         /*
-         * Detect redirection.
+         * Detect shell redirection.
          */
         val redirection =
-            RedirectionParser.parse(
-                expandedCommand
-            )
+            RedirectionParser
+                .parse(
+                    expandedCommand
+                )
 
         /*
          * Output redirection.
@@ -232,21 +355,35 @@ object TerminalCommandProcessor {
                 mutableListOf<String>()
 
             process(
-                command = redirection.command,
-                output = redirectedOutput,
-                recordHistory = false,
-                showPrompt = false
+                command =
+                    redirection.command,
+
+                output =
+                    redirectedOutput,
+
+                recordHistory =
+                    false,
+
+                showPrompt =
+                    false
             )
 
             val handled =
-                RedirectionEngine.handle(
-                    command = expandedCommand,
-                    commandOutput = redirectedOutput
-                )
+                RedirectionEngine
+                    .handle(
+                        command =
+                            expandedCommand,
+
+                        commandOutput =
+                            redirectedOutput
+                    )
 
             if (!handled) {
 
-                ExecutionStatus.set(1)
+                ExecutionStatus
+                    .set(
+                        1
+                    )
             }
 
             return
@@ -264,13 +401,19 @@ object TerminalCommandProcessor {
         ) {
 
             val inputContent =
-                VirtualFileSystem.readFile(
-                    redirection.target
-                )
+                VirtualFileSystem
+                    .readFile(
+                        redirection.target
+                    )
 
-            if (inputContent == null) {
+            if (
+                inputContent == null
+            ) {
 
-                ExecutionStatus.set(1)
+                ExecutionStatus
+                    .set(
+                        1
+                    )
 
                 output.add(
                     "${redirection.target}: No such file"
@@ -280,13 +423,19 @@ object TerminalCommandProcessor {
             }
 
             val inputTokens =
-                CommandTokenizer.tokenize(
-                    redirection.command
-                )
+                CommandTokenizer
+                    .tokenize(
+                        redirection.command
+                    )
 
-            if (inputTokens.isEmpty()) {
+            if (
+                inputTokens.isEmpty()
+            ) {
 
-                ExecutionStatus.set(1)
+                ExecutionStatus
+                    .set(
+                        1
+                    )
 
                 return
             }
@@ -297,15 +446,24 @@ object TerminalCommandProcessor {
                     .lowercase()
 
             val handled =
-                TextCommands.handleInput(
-                    commandName = inputCommandName,
-                    input = inputContent.lines(),
-                    output = output
-                )
+                TextCommands
+                    .handleInput(
+                        commandName =
+                            inputCommandName,
+
+                        input =
+                            inputContent.lines(),
+
+                        output =
+                            output
+                    )
 
             if (!handled) {
 
-                ExecutionStatus.set(1)
+                ExecutionStatus
+                    .set(
+                        1
+                    )
 
                 output.add(
                     "Input redirection is not supported for: $inputCommandName"
@@ -319,13 +477,19 @@ object TerminalCommandProcessor {
          * Quote-aware tokenization.
          */
         val tokens =
-            CommandTokenizer.tokenizeOrNull(
-                expandedCommand
-            )
+            CommandTokenizer
+                .tokenizeOrNull(
+                    expandedCommand
+                )
 
-        if (tokens == null) {
+        if (
+            tokens == null
+        ) {
 
-            ExecutionStatus.set(2)
+            ExecutionStatus
+                .set(
+                    2
+                )
 
             output.add(
                 "syntax error: unmatched quote"
@@ -334,7 +498,10 @@ object TerminalCommandProcessor {
             return
         }
 
-        if (tokens.isEmpty()) {
+        if (
+            tokens.isEmpty()
+        ) {
+
             return
         }
 
@@ -344,8 +511,12 @@ object TerminalCommandProcessor {
                 .lowercase()
 
         /*
-         * cp and mv require individual
-         * argument boundaries.
+         * cp and mv require individual arguments.
+         *
+         * Existing handlers otherwise expect:
+         *
+         * parts[0] = command
+         * parts[1] = remaining argument text
          */
         val parts =
             when (commandName) {
@@ -358,7 +529,9 @@ object TerminalCommandProcessor {
 
                 else -> {
 
-                    if (tokens.size == 1) {
+                    if (
+                        tokens.size == 1
+                    ) {
 
                         listOf(
                             commandName
@@ -368,42 +541,66 @@ object TerminalCommandProcessor {
 
                         listOf(
                             commandName,
+
                             tokens
                                 .drop(1)
-                                .joinToString(" ")
+                                .joinToString(
+                                    " "
+                                )
                         )
                     }
                 }
             }
 
         /*
-         * Pipe execution.
+         * Pipe engine.
          */
         if (
-            PipeEngine.handle(
-                command = expandedCommand,
-                output = output
-            )
+            PipeEngine
+                .handle(
+                    command =
+                        expandedCommand,
+
+                    output =
+                        output
+                )
         ) {
+
             return
         }
 
         /*
-         * Shell function execution.
-         *
-         * Function arguments will be added
-         * later in 052-03D.
-         */
+ * Atlas shell functions.
+ *
+ * Function arguments are preserved so:
+ *
+ * myFunction arg1 arg2
+ *
+ * receives:
+ *
+ * [arg1, arg2]
+ */
         if (
-            ShellFunctionEngine.execute(
-                name = commandName,
-                arguments = tokens.drop(1),
-                output = output,
-                showPrompt = showPrompt
-            )
+            ShellFunctionEngine
+                .execute(
+                    name =
+                        commandName,
+
+                    arguments =
+                        tokens.drop(1),
+
+                    output =
+                        output,
+
+                    showPrompt =
+                        showPrompt
+                )
         ) {
 
-            ExecutionStatus.set(0)
+            ExecutionStatus
+                .set(
+                    0
+                )
 
             return
         }
@@ -412,12 +609,19 @@ object TerminalCommandProcessor {
          * Normal command dispatch.
          */
         if (
-            CommandDispatcher.dispatch(
-                commandName = commandName,
-                parts = parts,
-                output = output
-            )
+            CommandDispatcher
+                .dispatch(
+                    commandName =
+                        commandName,
+
+                    parts =
+                        parts,
+
+                    output =
+                        output
+                )
         ) {
+
             return
         }
 
@@ -426,14 +630,21 @@ object TerminalCommandProcessor {
          */
         when {
 
-            commandName == "!!" -> {
+            commandName ==
+                    "!!" -> {
 
                 val lastCommand =
-                    CommandHistory.lastCommand()
+                    CommandHistory
+                        .lastCommand()
 
-                if (lastCommand == null) {
+                if (
+                    lastCommand == null
+                ) {
 
-                    ExecutionStatus.set(1)
+                    ExecutionStatus
+                        .set(
+                            1
+                        )
 
                     output.add(
                         "No previous command found."
@@ -446,27 +657,48 @@ object TerminalCommandProcessor {
                     )
 
                     process(
-                        command = lastCommand,
-                        output = output,
-                        recordHistory = false,
-                        showPrompt = showPrompt
+                        command =
+                            lastCommand,
+
+                        output =
+                            output,
+
+                        recordHistory =
+                            false,
+
+                        showPrompt =
+                            showPrompt
                     )
                 }
             }
 
-            commandName.startsWith("!") -> {
+            commandName
+                .startsWith(
+                    "!"
+                ) -> {
 
                 val historyReference =
-                    commandName.drop(1)
+                    commandName
+                        .drop(
+                            1
+                        )
 
                 val historyNumber =
-                    historyReference.toIntOrNull()
+                    historyReference
+                        .toIntOrNull()
 
-                if (historyNumber != null) {
+                if (
+                    historyNumber != null
+                ) {
 
-                    if (historyNumber < 1) {
+                    if (
+                        historyNumber < 1
+                    ) {
 
-                        ExecutionStatus.set(1)
+                        ExecutionStatus
+                            .set(
+                                1
+                            )
 
                         output.add(
                             "History numbers begin at 1."
@@ -475,13 +707,20 @@ object TerminalCommandProcessor {
                     } else {
 
                         val historyCommand =
-                            CommandHistory.getCommand(
-                                historyNumber - 1
-                            )
+                            CommandHistory
+                                .getCommand(
+                                    historyNumber -
+                                            1
+                                )
 
-                        if (historyCommand == null) {
+                        if (
+                            historyCommand == null
+                        ) {
 
-                            ExecutionStatus.set(1)
+                            ExecutionStatus
+                                .set(
+                                    1
+                                )
 
                             output.add(
                                 "No such history entry: $historyNumber"
@@ -494,10 +733,17 @@ object TerminalCommandProcessor {
                             )
 
                             process(
-                                command = historyCommand,
-                                output = output,
-                                recordHistory = false,
-                                showPrompt = showPrompt
+                                command =
+                                    historyCommand,
+
+                                output =
+                                    output,
+
+                                recordHistory =
+                                    false,
+
+                                showPrompt =
+                                    showPrompt
                             )
                         }
                     }
@@ -510,9 +756,14 @@ object TerminalCommandProcessor {
                                 historyReference
                             )
 
-                    if (historyCommand == null) {
+                    if (
+                        historyCommand == null
+                    ) {
 
-                        ExecutionStatus.set(1)
+                        ExecutionStatus
+                            .set(
+                                1
+                            )
 
                         output.add(
                             "No command starts with '$historyReference'"
@@ -525,21 +776,28 @@ object TerminalCommandProcessor {
                         )
 
                         process(
-                            command = historyCommand,
-                            output = output,
-                            recordHistory = false,
-                            showPrompt = showPrompt
+                            command =
+                                historyCommand,
+
+                            output =
+                                output,
+
+                            recordHistory =
+                                false,
+
+                            showPrompt =
+                                showPrompt
                         )
                     }
                 }
             }
 
-            /*
-             * Unknown command.
-             */
             else -> {
 
-                ExecutionStatus.set(127)
+                ExecutionStatus
+                    .set(
+                        127
+                    )
 
                 output.add(
                     "Command not found: $trimmedCommand"
