@@ -7,15 +7,15 @@ import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
 import com.noahrose.pocketlab.feature.linux.rootfs.filesystem.LinuxRootfsStagingManager
 import com.noahrose.pocketlab.feature.linux.rootfs.filesystem.LinuxRootfsStagingResult
 import com.noahrose.pocketlab.feature.linux.rootfs.integrity.LinuxRootfsIntegrityValidator
-import com.noahrose.pocketlab.feature.linux.rootfs.provision.LinuxRootfsSelector
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandExecutor
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandResult
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeAssetValidator
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemResult
 import com.noahrose.pocketlab.feature.linux.runtime.integrity.LinuxNativeRuntimeIntegrityValidator
 import com.noahrose.pocketlab.feature.linux.runtime.platform.LinuxRuntimeAbiDetector
-import com.noahrose.pocketlab.feature.linux.runtime.provision.LinuxRuntimeBinarySelector
 import com.noahrose.pocketlab.feature.system.DeviceInfoProvider
 import com.noahrose.pocketlab.feature.system.DeviceProfileFormatter
 import com.noahrose.pocketlab.feature.system.VersionInfo
@@ -29,7 +29,8 @@ import com.noahrose.pocketlab.feature.terminal.plugin.PluginRegistry
 import com.noahrose.pocketlab.feature.terminal.registry.CommandRegistry
 import com.noahrose.pocketlab.feature.terminal.script.ScriptEngine
 
-object UtilityCommands : CommandHandler {
+object UtilityCommands :
+    CommandHandler {
 
     override fun handle(
         commandName: String,
@@ -39,17 +40,25 @@ object UtilityCommands : CommandHandler {
 
         when (commandName) {
 
+            /*
+             * ------------------------------------------------
+             * HELP
+             * ------------------------------------------------
+             */
             "help" -> {
 
                 output.add(
                     "Available commands:"
                 )
 
-                output.add("")
+                output.add(
+                    ""
+                )
 
                 CommandRegistry
                     .getAll()
                     .groupBy { command ->
+
                         command.category
                     }
                     .toSortedMap()
@@ -65,19 +74,27 @@ object UtilityCommands : CommandHandler {
                             )
                         )
 
-                        commands.forEach { command ->
+                        commands
+                            .forEach { command ->
 
-                            output.add(
-                                "${command.name} - ${command.description}"
-                            )
-                        }
+                                output.add(
+                                    "${command.name} - ${command.description}"
+                                )
+                            }
 
-                        output.add("")
+                        output.add(
+                            ""
+                        )
                     }
 
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * SYSTEM INFORMATION
+             * ------------------------------------------------
+             */
             "sysinfo" -> {
 
                 val profile =
@@ -107,6 +124,11 @@ object UtilityCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * DEVICE COMPATIBILITY
+             * ------------------------------------------------
+             */
             "compatibility" -> {
 
                 val profile =
@@ -142,6 +164,11 @@ object UtilityCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * DEVICE PROFILE
+             * ------------------------------------------------
+             */
             "deviceprofile" -> {
 
                 val action =
@@ -171,7 +198,9 @@ object UtilityCommands : CommandHandler {
                             "Atlas Device Profile"
                         )
 
-                        output.add("")
+                        output.add(
+                            ""
+                        )
 
                         output.add(
                             "Bootstrapped : ${
@@ -199,7 +228,9 @@ object UtilityCommands : CommandHandler {
                                 "Profile      : loaded"
                             )
 
-                            output.add("")
+                            output.add(
+                                ""
+                            )
 
                             DeviceProfileFormatter
                                 .format(
@@ -275,6 +306,11 @@ object UtilityCommands : CommandHandler {
                 }
             }
 
+            /*
+             * ------------------------------------------------
+             * ATLAS SCRIPT ENGINE
+             * ------------------------------------------------
+             */
             "runscript" -> {
 
                 if (
@@ -326,24 +362,32 @@ object UtilityCommands : CommandHandler {
                     "Executing script: $scriptName"
                 )
 
-                ScriptEngine.execute(
-                    script =
-                        scriptContent.lines(),
+                ScriptEngine
+                    .execute(
+                        script =
+                            scriptContent.lines(),
 
-                    output =
-                        output
-                )
+                        output =
+                            output
+                    )
 
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * PLUGINS
+             * ------------------------------------------------
+             */
             "plugins" -> {
 
                 output.add(
                     "Installed Plugins"
                 )
 
-                output.add("")
+                output.add(
+                    ""
+                )
 
                 PluginRegistry
                     .getAll()
@@ -365,12 +409,19 @@ object UtilityCommands : CommandHandler {
                             "Description : ${plugin.info.description}"
                         )
 
-                        output.add("")
+                        output.add(
+                            ""
+                        )
                     }
 
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * VERSION
+             * ------------------------------------------------
+             */
             "version" -> {
 
                 output.add(
@@ -396,7 +447,20 @@ object UtilityCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * DIAGNOSTICS
+             * ------------------------------------------------
+             */
             "diagnostics" -> {
+
+                /*
+                 * Keep the actual native runtime and
+                 * repository state synchronized before
+                 * displaying diagnostics.
+                 */
+                LinuxRuntimeController
+                    .getSession()
 
                 val commandCount =
                     CommandRegistry
@@ -422,6 +486,9 @@ object UtilityCommands : CommandHandler {
                         .runtimeStatus()
                         .label
 
+                /*
+                 * Runtime filesystem.
+                 */
                 val filesystemResult =
                     LinuxRuntimeFilesystemManager
                         .getLastPreparationResult()
@@ -439,11 +506,17 @@ object UtilityCommands : CommandHandler {
                             "NOT PREPARED"
                     }
 
+                /*
+                 * Runtime assets.
+                 */
                 val runtimeAssetStatus =
                     LinuxRuntimeAssetValidator
                         .getStatus()
                         .label
 
+                /*
+                 * Runtime ABI.
+                 */
                 val runtimeAbi =
                     LinuxRuntimeAbiDetector
                         .getPreferredAbi()
@@ -451,58 +524,57 @@ object UtilityCommands : CommandHandler {
                 val runtimeAbiStatus =
                     runtimeAbi
                         ?.let { abi ->
+
                             "${abi.displayName} (${abi.androidName})"
                         }
                         ?: "UNSUPPORTED"
 
-                val runtimeBinary =
-                    LinuxRuntimeBinarySelector
-                        .getPreferredBinary()
-
+                /*
+                 * Runtime binary descriptor.
+                 *
+                 * ARM64 is currently the fully
+                 * provisioned Atlas runtime target.
+                 */
                 val runtimeBinaryStatus =
-                    runtimeBinary
-                        ?.assetName
-                        ?: "UNAVAILABLE"
+                    when (
+                        runtimeAbi
+                            ?.androidName
+                    ) {
 
+                        "arm64-v8a" ->
+                            "proot-arm64-v8a"
+
+                        "armeabi-v7a" ->
+                            "proot-armeabi-v7a"
+
+                        "x86_64" ->
+                            "proot-x86_64"
+
+                        "x86" ->
+                            "proot-x86"
+
+                        else ->
+                            "UNAVAILABLE"
+                    }
+
+                /*
+                 * Native PRoot integrity.
+                 */
                 val runtimeIntegrity =
                     LinuxNativeRuntimeIntegrityValidator
                         .validate()
 
-                val runtimeIntegrityStatus =
-                    runtimeIntegrity
-                        .status
-                        .label
-
-                val runtimeSourceStatus =
-                    runtimeBinary
-                        ?.source
-                        ?.let { source ->
-                            "${source.projectName} ${source.version}"
-                        }
-                        ?: "UNAVAILABLE"
-
-                val rootfs =
-                    LinuxRootfsSelector
-                        .getPreferredRootfs()
-
-                val rootfsStatus =
-                    rootfs
-                        ?.let { descriptor ->
-                            "${descriptor.distribution} ${descriptor.release}"
-                        }
-                        ?: "UNAVAILABLE"
-
-                val rootfsArchiveStatus =
-                    rootfs
-                        ?.archiveName
-                        ?: "UNAVAILABLE"
-
+                /*
+                 * Rootfs staging.
+                 */
                 val rootfsStagingResult =
                     LinuxRootfsStagingManager
                         .getLastPreparationResult()
 
                 val rootfsStagingStatus =
-                    when (rootfsStagingResult) {
+                    when (
+                        rootfsStagingResult
+                    ) {
 
                         LinuxRootfsStagingResult.Ready ->
                             "READY"
@@ -514,121 +586,171 @@ object UtilityCommands : CommandHandler {
                             "NOT PREPARED"
                     }
 
+                /*
+                 * Trusted Ubuntu archive integrity.
+                 */
                 val rootfsIntegrity =
                     LinuxRootfsIntegrityValidator
                         .validate()
 
-                val rootfsIntegrityStatus =
-                    rootfsIntegrity
-                        .status
-                        .label
+                /*
+                 * Current trusted ARM64 rootfs
+                 * provenance.
+                 */
+                val rootfsSourceStatus =
+                    when (
+                        runtimeAbi
+                            ?.androidName
+                    ) {
+
+                        "arm64-v8a" ->
+                            "Ubuntu 24.04.4 LTS"
+
+                        else ->
+                            "UNAVAILABLE"
+                    }
+
+                val rootfsArchiveStatus =
+                    when (
+                        runtimeAbi
+                            ?.androidName
+                    ) {
+
+                        "arm64-v8a" ->
+                            "ubuntu-base-24.04.4-base-arm64.tar.gz"
+
+                        else ->
+                            "UNAVAILABLE"
+                    }
+
+                val runtimeSourceStatus =
+                    when (
+                        runtimeAbi
+                            ?.androidName
+                    ) {
+
+                        "arm64-v8a" ->
+                            "Atlas PRoot 5.1.107.92"
+
+                        else ->
+                            "UNAVAILABLE"
+                    }
 
                 output.add(
                     "Atlas Cyberdeck Diagnostics"
                 )
 
-                output.add("")
-
                 output.add(
-                    "Version          : ${VersionInfo.VERSION}"
+                    ""
                 )
 
                 output.add(
-                    "Filesystem       : ONLINE"
+                    "Version           : ${VersionInfo.VERSION}"
                 )
 
                 output.add(
-                    "Runtime Storage  : $runtimeStorageStatus"
+                    "Filesystem        : ONLINE"
                 )
 
                 output.add(
-                    "Runtime Assets   : $runtimeAssetStatus"
+                    "Runtime Storage   : $runtimeStorageStatus"
                 )
 
                 output.add(
-                    "Runtime ABI      : $runtimeAbiStatus"
+                    "Runtime Assets    : $runtimeAssetStatus"
                 )
 
                 output.add(
-                    "Runtime Binary   : $runtimeBinaryStatus"
+                    "Runtime ABI       : $runtimeAbiStatus"
                 )
 
                 output.add(
-                    "Runtime Integrity: $runtimeIntegrityStatus"
+                    "Runtime Binary    : $runtimeBinaryStatus"
                 )
 
                 output.add(
-                    "Runtime Source   : $runtimeSourceStatus"
+                    "Runtime Integrity : ${runtimeIntegrity.status.label}"
                 )
 
                 output.add(
-                    "Rootfs Source    : $rootfsStatus"
+                    "Runtime Source    : $runtimeSourceStatus"
                 )
 
                 output.add(
-                    "Rootfs Archive   : $rootfsArchiveStatus"
+                    "Rootfs Source     : $rootfsSourceStatus"
                 )
 
                 output.add(
-                    "Rootfs Staging   : $rootfsStagingStatus"
+                    "Rootfs Archive    : $rootfsArchiveStatus"
                 )
 
                 output.add(
-                    "Rootfs Integrity : $rootfsIntegrityStatus"
+                    "Rootfs Staging    : $rootfsStagingStatus"
                 )
 
                 output.add(
-                    "Command Registry : ONLINE"
+                    "Rootfs Integrity  : ${rootfsIntegrity.status.label}"
                 )
 
                 output.add(
-                    "Handlers         : ONLINE"
+                    "Command Registry  : ONLINE"
                 )
 
                 output.add(
-                    "Plugins          : ONLINE"
+                    "Handlers          : ONLINE"
                 )
 
                 output.add(
-                    "Linux Runtime    : $linuxStatus"
+                    "Plugins           : ONLINE"
                 )
 
                 output.add(
-                    "Device Profile   : ${
+                    "Linux Runtime     : $linuxStatus"
+                )
+
+                output.add(
+                    "Device Profile    : ${
                         if (
                             DeviceBootstrapManager
                                 .isBootstrapped()
                         ) {
-
                             "ONLINE"
-
                         } else {
-
                             "NOT INITIALIZED"
                         }
                     }"
                 )
 
+                /*
+                 * Detailed error reporting only appears
+                 * when a subsystem has a concrete
+                 * diagnostic message.
+                 */
                 if (
                     filesystemResult is
                             LinuxRuntimeFilesystemResult.Failure
                 ) {
 
-                    output.add("")
+                    output.add(
+                        ""
+                    )
 
                     output.add(
-                        "Runtime Error   : ${filesystemResult.message}"
+                        "Runtime Error    : ${filesystemResult.message}"
                     )
                 }
 
                 if (
-                    runtimeIntegrity.message != null
+                    runtimeIntegrity
+                        .message != null
                 ) {
 
-                    output.add("")
+                    output.add(
+                        ""
+                    )
 
                     output.add(
-                        "Integrity Error : ${runtimeIntegrity.message}"
+                        "Runtime Integrity Error : ${runtimeIntegrity.message}"
                     )
                 }
 
@@ -637,80 +759,93 @@ object UtilityCommands : CommandHandler {
                             LinuxRootfsStagingResult.Failure
                 ) {
 
-                    output.add("")
+                    output.add(
+                        ""
+                    )
 
                     output.add(
-                        "Rootfs Error    : ${rootfsStagingResult.message}"
+                        "Rootfs Staging Error : ${rootfsStagingResult.message}"
                     )
                 }
 
                 if (
-                    rootfsIntegrity.message != null
+                    rootfsIntegrity
+                        .message != null
                 ) {
 
-                    output.add("")
+                    output.add(
+                        ""
+                    )
 
                     output.add(
                         "Rootfs Integrity Error : ${rootfsIntegrity.message}"
                     )
                 }
 
-                output.add("")
-
                 output.add(
-                    "Commands         : $commandCount"
+                    ""
                 )
 
                 output.add(
-                    "Handlers         : $handlerCount"
+                    "Commands          : $commandCount"
                 )
 
                 output.add(
-                    "Plugins          : $pluginCount"
+                    "Handlers          : $handlerCount"
                 )
 
-                output.add("")
+                output.add(
+                    "Plugins           : $pluginCount"
+                )
+
+                output.add(
+                    ""
+                )
 
                 val overallStatus =
                     when {
 
                         filesystemResult is
                                 LinuxRuntimeFilesystemResult.Failure ->
-
                             "DEGRADED"
 
-                        runtimeIntegrity.message != null ->
-
+                        runtimeIntegrity
+                            .message != null ->
                             "DEGRADED"
 
                         rootfsStagingResult is
                                 LinuxRootfsStagingResult.Failure ->
-
                             "DEGRADED"
 
-                        rootfsIntegrity.message != null ->
-
+                        rootfsIntegrity
+                            .message != null ->
                             "DEGRADED"
 
                         else ->
-
                             "HEALTHY"
                     }
 
                 output.add(
-                    "Overall Status   : $overallStatus"
+                    "Overall Status    : $overallStatus"
                 )
 
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * HISTORY
+             * ------------------------------------------------
+             */
             "history" -> {
 
                 val history =
                     CommandHistory
                         .getHistory()
 
-                if (history.isEmpty()) {
+                if (
+                    history.isEmpty()
+                ) {
 
                     output.add(
                         "No commands in history."
@@ -718,19 +853,25 @@ object UtilityCommands : CommandHandler {
 
                 } else {
 
-                    history.forEachIndexed {
-                            index,
-                            command ->
+                    history
+                        .forEachIndexed {
+                                index,
+                                command ->
 
-                        output.add(
-                            "${index + 1}  $command"
-                        )
-                    }
+                            output.add(
+                                "${index + 1}  $command"
+                            )
+                        }
                 }
 
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * CLEAR
+             * ------------------------------------------------
+             */
             "clear" -> {
 
                 output.clear()
@@ -738,6 +879,11 @@ object UtilityCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * ATLAS IDENTITY
+             * ------------------------------------------------
+             */
             "whoami" -> {
 
                 output.add(
@@ -747,6 +893,11 @@ object UtilityCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * ATLAS WORKING DIRECTORY
+             * ------------------------------------------------
+             */
             "pwd" -> {
 
                 output.add(
@@ -762,16 +913,35 @@ object UtilityCommands : CommandHandler {
                 return true
             }
 
+            /*
+             * ------------------------------------------------
+             * ATLAS STATUS
+             * ------------------------------------------------
+             */
             "status" -> {
+
+                LinuxRuntimeController
+                    .getSession()
 
                 val installation =
                     LinuxRepository
                         .getInstallation()
 
                 val linuxStatus =
-                    installation
-                        .runtimeStatus()
-                        .label
+                    when {
+
+                        installation.isInstalling ->
+                            "INSTALLING"
+
+                        !installation.installed ->
+                            "NOT INSTALLED"
+
+                        installation.running ->
+                            "RUNNING"
+
+                        else ->
+                            "STOPPED"
+                    }
 
                 output.add(
                     "Atlas Cyberdeck"
@@ -794,24 +964,58 @@ object UtilityCommands : CommandHandler {
 
             "linux" -> {
 
+                /*
+                 * Reconstruct everything after "linux".
+                 *
+                 * Atlas Terminal may deliver arguments as:
+                 *
+                 * [linux, "exec whoami"]
+                 *
+                 * or:
+                 *
+                 * [linux, exec, whoami]
+                 *
+                 * Reconstructing the tail makes this handler
+                 * compatible with both representations.
+                 */
+                val rawArguments =
+                    parts
+                        .drop(1)
+                        .joinToString(" ")
+                        .trim()
+
                 val action =
-                    if (
-                        parts.size < 2 ||
-                        parts[1].isBlank()
-                    ) {
+                    if (rawArguments.isBlank()) {
 
                         "status"
 
                     } else {
 
-                        parts[1]
+                        rawArguments
+                            .substringBefore(" ")
                             .trim()
                             .lowercase()
                     }
 
+                val actionArguments =
+                    rawArguments
+                        .substringAfter(
+                            " ",
+                            ""
+                        )
+                        .trim()
+
                 when (action) {
 
+                    /*
+                     * ----------------------------------------
+                     * STATUS
+                     * ----------------------------------------
+                     */
                     "status" -> {
+
+                        LinuxRuntimeController
+                            .getSession()
 
                         val installation =
                             LinuxRepository
@@ -819,26 +1023,23 @@ object UtilityCommands : CommandHandler {
 
                         val installationStatus =
                             if (installation.installed) {
-
                                 "INSTALLED"
-
                             } else {
-
                                 "NOT INSTALLED"
                             }
 
-                        val runtimeState =
-                            installation
-                                .runtimeStatus()
-
                         val runtimeStatus =
-                            when (runtimeState) {
+                            when (
+                                installation.runtimeStatus()
+                            ) {
 
                                 LinuxRuntimeStatus.NOT_INSTALLED ->
                                     "UNAVAILABLE"
 
                                 else ->
-                                    runtimeState.label
+                                    installation
+                                        .runtimeStatus()
+                                        .label
                             }
 
                         val distribution =
@@ -873,6 +1074,11 @@ object UtilityCommands : CommandHandler {
                         return true
                     }
 
+                    /*
+                     * ----------------------------------------
+                     * START
+                     * ----------------------------------------
+                     */
                     "start" -> {
 
                         when (
@@ -919,13 +1125,6 @@ object UtilityCommands : CommandHandler {
                                 )
                             }
 
-                            LinuxRuntimeControlResult.START_FAILED -> {
-
-                                output.add(
-                                    "linux: unable to start runtime."
-                                )
-                            }
-
                             else -> {
 
                                 output.add(
@@ -937,6 +1136,11 @@ object UtilityCommands : CommandHandler {
                         return true
                     }
 
+                    /*
+                     * ----------------------------------------
+                     * STOP
+                     * ----------------------------------------
+                     */
                     "stop" -> {
 
                         when (
@@ -965,13 +1169,6 @@ object UtilityCommands : CommandHandler {
                                 )
                             }
 
-                            LinuxRuntimeControlResult.STOP_FAILED -> {
-
-                                output.add(
-                                    "linux: unable to stop runtime."
-                                )
-                            }
-
                             else -> {
 
                                 output.add(
@@ -983,18 +1180,175 @@ object UtilityCommands : CommandHandler {
                         return true
                     }
 
+                    /*
+                     * ----------------------------------------
+                     * REAL UBUNTU COMMAND BRIDGE
+                     *
+                     * linux exec whoami
+                     * linux exec pwd
+                     * linux exec uname -m
+                     * linux exec cat /etc/os-release
+                     * ----------------------------------------
+                     */
+                    "exec" -> {
+
+                        val command =
+                            actionArguments
+
+                        if (command.isBlank()) {
+
+                            output.add(
+                                "Usage: linux exec <command>"
+                            )
+
+                            return true
+                        }
+
+                        val installation =
+                            LinuxRepository
+                                .getInstallation()
+
+                        if (!installation.installed) {
+
+                            output.add(
+                                "linux: Ubuntu is not installed."
+                            )
+
+                            return true
+                        }
+
+                        if (!installation.running) {
+
+                            output.add(
+                                "linux: Ubuntu runtime is not running."
+                            )
+
+                            output.add(
+                                "Start it with: linux start"
+                            )
+
+                            return true
+                        }
+
+                        when (
+                            val result =
+                                LinuxGuestCommandExecutor
+                                    .execute(
+                                        command
+                                    )
+                        ) {
+
+                            is LinuxGuestCommandResult.Success -> {
+
+                                if (
+                                    result.output
+                                        .isNotBlank()
+                                ) {
+
+                                    result.output
+                                        .lines()
+                                        .forEach { line ->
+
+                                            output.add(
+                                                line
+                                            )
+                                        }
+                                }
+
+                                if (
+                                    result.errorOutput
+                                        .isNotBlank()
+                                ) {
+
+                                    result.errorOutput
+                                        .lines()
+                                        .forEach { line ->
+
+                                            output.add(
+                                                line
+                                            )
+                                        }
+                                }
+
+                                if (
+                                    result.exitCode != 0
+                                ) {
+
+                                    output.add(
+                                        "linux: command exited with code ${result.exitCode}"
+                                    )
+                                }
+                            }
+
+                            is LinuxGuestCommandResult.Failure -> {
+
+                                output.add(
+                                    "linux: ${result.message}"
+                                )
+
+                                if (
+                                    result.output
+                                        .isNotBlank()
+                                ) {
+
+                                    result.output
+                                        .lines()
+                                        .forEach { line ->
+
+                                            output.add(
+                                                line
+                                            )
+                                        }
+                                }
+
+                                if (
+                                    result.errorOutput
+                                        .isNotBlank()
+                                ) {
+
+                                    result.errorOutput
+                                        .lines()
+                                        .forEach { line ->
+
+                                            output.add(
+                                                line
+                                            )
+                                        }
+                                }
+                            }
+                        }
+
+                        return true
+                    }
+
+                    /*
+                     * ----------------------------------------
+                     * UNKNOWN ACTION
+                     * ----------------------------------------
+                     */
                     else -> {
 
                         output.add(
-                            "Usage: linux [status|start|stop]"
+                            "Usage: linux [status|start|stop|exec]"
+                        )
+
+                        output.add(
+                            "       linux exec <command>"
                         )
 
                         return true
                     }
                 }
             }
-
+            /*
+             * ------------------------------------------------
+             * NEOFETCH
+             * ------------------------------------------------
+             */
             "neofetch" -> {
+
+                LinuxRuntimeController
+                    .getSession()
 
                 val installation =
                     LinuxRepository
@@ -1025,7 +1379,9 @@ object UtilityCommands : CommandHandler {
                     "Shell   : Atlas Terminal"
                 )
 
-                if (installation.installed) {
+                if (
+                    installation.installed
+                ) {
 
                     val distribution =
                         installation
@@ -1033,7 +1389,9 @@ object UtilityCommands : CommandHandler {
                             .name
                             .lowercase()
                             .replaceFirstChar { character ->
-                                character.uppercase()
+
+                                character
+                                    .uppercase()
                             }
 
                     output.add(

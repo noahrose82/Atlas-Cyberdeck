@@ -39,6 +39,12 @@ fun LinuxScreen(
     val blockedReason by
     linuxViewModel.blockedReason
 
+    val runtimeMessage by
+    linuxViewModel.runtimeMessage
+
+    val runtimeBusy by
+    linuxViewModel.runtimeBusy
+
     val lifecycleOwner =
         LocalLifecycleOwner.current
 
@@ -316,8 +322,7 @@ fun LinuxScreen(
                                     installation
                                         .installationProgress *
                                             100
-                                    )
-                                .toInt()
+                                    ).toInt()
                         }% complete",
 
                     style =
@@ -342,10 +347,13 @@ fun LinuxScreen(
                     .forEach { step ->
 
                         InstallationStepRow(
-                            step = step,
+                            step =
+                                step,
+
                             currentStep =
                                 installation
                                     .installationStep,
+
                             currentProgress =
                                 installation
                                     .installationProgress
@@ -379,18 +387,95 @@ fun LinuxScreen(
 
             Text(
                 text =
-                    if (installation.running) {
-                        "Runtime: Running"
-                    } else {
-                        "Runtime: Stopped"
+                    when {
+
+                        runtimeBusy &&
+                                !installation.running ->
+                            "Runtime: Starting..."
+
+                        runtimeBusy &&
+                                installation.running ->
+                            "Runtime: Stopping..."
+
+                        installation.running ->
+                            "Runtime: Running"
+
+                        else ->
+                            "Runtime: Stopped"
                     },
 
                 color =
-                    if (installation.running) {
-                        Color(
-                            0xFF00C853
-                        )
+                    when {
+
+                        runtimeBusy ->
+                            Color(
+                                0xFFFFC107
+                            )
+
+                        installation.running ->
+                            Color(
+                                0xFF00C853
+                            )
+
+                        else ->
+                            MaterialTheme
+                                .colorScheme
+                                .onSurfaceVariant
+                    },
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleMedium
+            )
+        }
+
+        /*
+         * Runtime status/error feedback.
+         */
+        if (
+            !runtimeMessage
+                .isNullOrBlank()
+        ) {
+
+            val isError =
+                runtimeMessage
+                    ?.contains(
+                        "failed",
+                        ignoreCase = true
+                    ) == true ||
+                        runtimeMessage
+                            ?.contains(
+                                "could not",
+                                ignoreCase = true
+                            ) == true ||
+                        runtimeMessage
+                            ?.contains(
+                                "exited",
+                                ignoreCase = true
+                            ) == true
+
+            Text(
+                text =
+                    runtimeMessage
+                        ?: "",
+
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .widthIn(
+                            max = 500.dp
+                        ),
+
+                color =
+                    if (isError) {
+
+                        MaterialTheme
+                            .colorScheme
+                            .error
+
                     } else {
+
                         MaterialTheme
                             .colorScheme
                             .onSurfaceVariant
@@ -399,7 +484,7 @@ fun LinuxScreen(
                 style =
                     MaterialTheme
                         .typography
-                        .titleMedium
+                        .bodyMedium
             )
         }
 
@@ -466,11 +551,18 @@ fun LinuxScreen(
 
                                 linuxViewModel
                                     .stopLinux()
-                            }
+                            },
+
+                            enabled =
+                                !runtimeBusy
                         ) {
 
                             Text(
-                                "Stop Linux"
+                                if (runtimeBusy) {
+                                    "Stopping..."
+                                } else {
+                                    "Stop Linux"
+                                }
                             )
                         }
 
@@ -481,11 +573,18 @@ fun LinuxScreen(
 
                                 linuxViewModel
                                     .startLinux()
-                            }
+                            },
+
+                            enabled =
+                                !runtimeBusy
                         ) {
 
                             Text(
-                                "Start Linux"
+                                if (runtimeBusy) {
+                                    "Starting..."
+                                } else {
+                                    "Start Linux"
+                                }
                             )
                         }
                     }
@@ -495,7 +594,10 @@ fun LinuxScreen(
 
                             linuxViewModel
                                 .removeLinux()
-                        }
+                        },
+
+                        enabled =
+                            !runtimeBusy
                     ) {
 
                         Text(
@@ -556,10 +658,12 @@ private fun InstallationStepRow(
     val statusSymbol =
         when {
 
-            currentProgress > stepProgress ->
+            currentProgress >
+                    stepProgress ->
                 "✓"
 
-            currentStep == step ->
+            currentStep ==
+                    step ->
                 "▶"
 
             else ->
@@ -569,12 +673,14 @@ private fun InstallationStepRow(
     val statusColor =
         when {
 
-            currentProgress > stepProgress ->
+            currentProgress >
+                    stepProgress ->
                 Color(
                     0xFF00C853
                 )
 
-            currentStep == step ->
+            currentStep ==
+                    step ->
                 Color(
                     0xFFFFC107
                 )

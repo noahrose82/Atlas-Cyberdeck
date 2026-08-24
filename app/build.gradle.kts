@@ -48,11 +48,12 @@ android {
     /*
      * Atlas native runtime packaging.
      *
-     * PRoot is shipped as signed APK native code.
+     * PRoot and the external PRoot loader are
+     * shipped as signed APK native code.
      *
-     * Legacy native packaging is intentional here:
-     * Atlas needs a real executable filesystem path
-     * inside ApplicationInfo.nativeLibraryDir.
+     * Legacy native packaging is intentional:
+     * Atlas requires real executable filesystem
+     * paths through ApplicationInfo.nativeLibraryDir.
      */
     packaging {
         jniLibs {
@@ -62,11 +63,23 @@ android {
 
             /*
              * Preserve the exact verified Atlas
-             * PRoot binary without another AGP
-             * stripping pass.
+             * PRoot runtime binary.
              */
             keepDebugSymbols +=
                 "**/libproot_atlas.so"
+
+            /*
+             * Preserve the exact verified external
+             * ARM64 PRoot loader.
+             *
+             * Android permits execution from the
+             * APK native-library directory, which
+             * allows PRoot to load guest Ubuntu
+             * ELF binaries without executing them
+             * directly from writable app storage.
+             */
+            keepDebugSymbols +=
+                "**/libproot_loader_atlas.so"
         }
     }
 }

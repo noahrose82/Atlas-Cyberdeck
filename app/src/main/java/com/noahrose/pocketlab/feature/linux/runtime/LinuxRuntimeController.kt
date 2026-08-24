@@ -6,16 +6,54 @@ import com.noahrose.pocketlab.feature.system.capability.AtlasFeature
 
 object LinuxRuntimeController {
 
-    private val backend: LinuxRuntimeBackend =
-        SimulatedLinuxRuntimeBackend
+    /*
+     * F3P:
+     *
+     * The simulated backend has been replaced by
+     * the real PRoot-backed Ubuntu runtime.
+     */
+    private val backend:
+            LinuxRuntimeBackend =
+        ProotLinuxRuntimeBackend
 
-    private var activeSession: LinuxRuntimeSession? =
+    private var activeSession:
+            LinuxRuntimeSession? =
         null
 
-    fun getSession(): LinuxRuntimeSession? =
-        activeSession
+    fun getSession():
+            LinuxRuntimeSession? {
 
-    fun start(): LinuxRuntimeControlResult {
+        /*
+         * Do not expose a stale session if the
+         * underlying PRoot process has already
+         * exited.
+         */
+        if (
+            backend ===
+            ProotLinuxRuntimeBackend &&
+            !ProotLinuxRuntimeBackend
+                .isProcessAlive()
+        ) {
+
+            activeSession =
+                null
+
+            val installation =
+                LinuxRepository
+                    .getInstallation()
+
+            if (installation.running) {
+
+                LinuxRepository
+                    .stopLinux()
+            }
+        }
+
+        return activeSession
+    }
+
+    fun start():
+            LinuxRuntimeControlResult {
 
         val installation =
             LinuxRepository
@@ -33,10 +71,26 @@ object LinuxRuntimeController {
                 .NOT_INSTALLED
         }
 
+        /*
+         * Reconcile a stale RUNNING flag before
+         * deciding that Linux is already running.
+         */
         if (installation.running) {
 
-            return LinuxRuntimeControlResult
-                .ALREADY_RUNNING
+            if (
+                ProotLinuxRuntimeBackend
+                    .isProcessAlive()
+            ) {
+
+                return LinuxRuntimeControlResult
+                    .ALREADY_RUNNING
+            }
+
+            LinuxRepository
+                .stopLinux()
+
+            activeSession =
+                null
         }
 
         val linuxAvailable =
@@ -58,8 +112,27 @@ object LinuxRuntimeController {
 
             is LinuxRuntimeBackendResult.Success -> {
 
-                activeSession =
+                val session =
                     result.session
+
+                if (
+                    session == null ||
+                    !ProotLinuxRuntimeBackend
+                        .isProcessAlive()
+                ) {
+
+                    activeSession =
+                        null
+
+                    LinuxRepository
+                        .stopLinux()
+
+                    return LinuxRuntimeControlResult
+                        .START_FAILED
+                }
+
+                activeSession =
+                    session
 
                 LinuxRepository
                     .startLinux()
@@ -73,13 +146,17 @@ object LinuxRuntimeController {
                 activeSession =
                     null
 
+                LinuxRepository
+                    .stopLinux()
+
                 LinuxRuntimeControlResult
                     .START_FAILED
             }
         }
     }
 
-    fun stop(): LinuxRuntimeControlResult {
+    fun stop():
+            LinuxRuntimeControlResult {
 
         val installation =
             LinuxRepository
@@ -94,7 +171,18 @@ object LinuxRuntimeController {
                 .NOT_INSTALLED
         }
 
-        if (!installation.running) {
+        val processAlive =
+            ProotLinuxRuntimeBackend
+                .isProcessAlive()
+
+        /*
+         * Repository and process both agree that
+         * the runtime is already stopped.
+         */
+        if (
+            !installation.running &&
+            !processAlive
+        ) {
 
             activeSession =
                 null
@@ -121,6 +209,11 @@ object LinuxRuntimeController {
 
             is LinuxRuntimeBackendResult.Failure -> {
 
+                /*
+                 * Do not claim STOPPED when the
+                 * backend could not terminate the
+                 * actual process.
+                 */
                 LinuxRuntimeControlResult
                     .STOP_FAILED
             }

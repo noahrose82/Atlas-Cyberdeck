@@ -8,7 +8,11 @@ object LinuxNativeRuntimeResolver {
     private const val PROOT_LIBRARY_NAME =
         "libproot_atlas.so"
 
-    private var nativeLibraryDirectory: File? =
+    private const val PROOT_LOADER_LIBRARY_NAME =
+        "libproot_loader_atlas.so"
+
+    private var nativeLibraryDirectory:
+            File? =
         null
 
     fun initialize(
@@ -19,12 +23,16 @@ object LinuxNativeRuntimeResolver {
             context
                 .applicationInfo
                 .nativeLibraryDir
-                ?.let { path ->
-                    File(path)
+                ?.let { directory ->
+
+                    File(
+                        directory
+                    )
                 }
     }
 
-    fun getProotExecutable(): File? {
+    fun getProotExecutable():
+            File? {
 
         val directory =
             nativeLibraryDirectory
@@ -36,10 +44,36 @@ object LinuxNativeRuntimeResolver {
         )
     }
 
-    fun isProotAvailable(): Boolean {
+    fun getProotLoaderExecutable():
+            File? {
+
+        val directory =
+            nativeLibraryDirectory
+                ?: return null
+
+        return File(
+            directory,
+            PROOT_LOADER_LIBRARY_NAME
+        )
+    }
+
+    fun isProotAvailable():
+            Boolean {
 
         val executable =
             getProotExecutable()
+                ?: return false
+
+        return executable.exists() &&
+                executable.isFile &&
+                executable.canExecute()
+    }
+
+    fun isProotLoaderAvailable():
+            Boolean {
+
+        val executable =
+            getProotLoaderExecutable()
                 ?: return false
 
         return executable.exists() &&
