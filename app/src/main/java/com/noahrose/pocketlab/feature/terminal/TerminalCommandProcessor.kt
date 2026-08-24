@@ -29,24 +29,13 @@ object TerminalCommandProcessor {
     ) {
 
         /*
-         * ------------------------------------------------
-         * REAL UBUNTU SHELL MODE
-         * ------------------------------------------------
-         *
-         * This must run before the Atlas parser.
-         *
-         * Ubuntu commands must receive their own:
-         *
-         * variables
-         * pipes
-         * redirection
-         * &&
-         * ||
-         * wildcards
-         * quoting
-         *
-         * without Atlas rewriting them first.
-         */
+ * ------------------------------------------------
+ * REAL UBUNTU SHELL MODE
+ * ------------------------------------------------
+ *
+ * This path intentionally runs before the Atlas
+ * parser so Ubuntu receives its own shell syntax.
+ */
         if (
             LinuxShellMode
                 .isActive()
@@ -66,13 +55,9 @@ object TerminalCommandProcessor {
                     )
             }
 
-            if (showPrompt) {
-
-                output.add(
-                    "${LinuxShellMode.getPrompt()} $guestCommand"
-                )
-            }
-
+            /*
+             * Blank Enter.
+             */
             if (
                 guestCommand.isBlank()
             ) {
@@ -81,11 +66,12 @@ object TerminalCommandProcessor {
             }
 
             /*
-             * "exit" switches back to Atlas.
+             * ------------------------------------------------
+             * EXIT UBUNTU MODE
+             * ------------------------------------------------
              *
-             * It intentionally does NOT get sent
-             * to Ubuntu because that would kill
-             * the persistent guest shell process.
+             * Do NOT send this into the persistent Ubuntu
+             * /bin/sh process.
              */
             if (
                 guestCommand.equals(
@@ -93,6 +79,13 @@ object TerminalCommandProcessor {
                     ignoreCase = true
                 )
             ) {
+
+                if (showPrompt) {
+
+                    output.add(
+                        "${LinuxShellMode.getPrompt()} exit"
+                    )
+                }
 
                 LinuxShellMode
                     .exit()
@@ -103,10 +96,49 @@ object TerminalCommandProcessor {
                     )
 
                 output.add(
-                    "Returned to Atlas shell."
+                    "Welcome back to Atlas shell."
                 )
 
                 return
+            }
+
+            /*
+             * ------------------------------------------------
+             * CLEAR
+             * ------------------------------------------------
+             *
+             * A real shell would emit terminal control
+             * sequences. Atlas Terminal currently renders
+             * line-oriented output instead of interpreting
+             * ANSI screen-control sequences.
+             *
+             * Handle clear directly at the UI layer.
+             */
+            if (
+                guestCommand.equals(
+                    "clear",
+                    ignoreCase = true
+                )
+            ) {
+
+                output.clear()
+
+                ExecutionStatus
+                    .set(
+                        0
+                    )
+
+                return
+            }
+
+            /*
+             * Show the Ubuntu prompt and entered command.
+             */
+            if (showPrompt) {
+
+                output.add(
+                    "${LinuxShellMode.getPrompt()} $guestCommand"
+                )
             }
 
             when (

@@ -14,27 +14,39 @@ object LinuxShellMode {
             String =
         "/root"
 
+    /*
+     * ------------------------------------------------
+     * SHELL STATE
+     * ------------------------------------------------
+     */
     fun isActive():
             Boolean {
 
-        /*
-         * Shell mode cannot remain active if
-         * the native Ubuntu runtime has exited.
-         */
-        if (
-            active &&
-            ProotLinuxRuntimeBackend
-                .getProcess() == null
-        ) {
-
-            active =
-                false
-
-            currentDirectory =
-                "/root"
+        if (!active) {
+            return false
         }
 
-        return active
+        /*
+         * If the native Ubuntu process disappeared,
+         * shell mode must immediately collapse back
+         * to Atlas rather than leaving the terminal
+         * visually stuck in Linux mode.
+         */
+        val process =
+            ProotLinuxRuntimeBackend
+                .getProcess()
+
+        if (
+            process == null ||
+            !process.isAlive
+        ) {
+
+            reset()
+
+            return false
+        }
+
+        return true
     }
 
     fun enter():
@@ -52,6 +64,9 @@ object LinuxShellMode {
         active =
             true
 
+        currentDirectory =
+            "/root"
+
         refreshWorkingDirectory()
 
         return true
@@ -60,37 +75,45 @@ object LinuxShellMode {
     fun exit() {
 
         /*
-         * Leaving Atlas Linux shell mode must
-         * NOT terminate the underlying Ubuntu
-         * runtime.
+         * Leaving shell mode does NOT terminate
+         * Ubuntu.
          *
-         * The persistent /bin/sh process remains
-         * available for linux exec and future
-         * shell sessions.
+         * The persistent guest remains available
+         * for:
+         *
+         * linux exec
+         * linux shell
          */
-        active =
-            false
-
-        currentDirectory =
-            "/root"
+        reset()
     }
 
+    /*
+     * ------------------------------------------------
+     * PROMPT
+     * ------------------------------------------------
+     */
     fun getPrompt():
             String {
 
         val displayDirectory =
-            when (currentDirectory) {
-
-                "/root" ->
-                    "~"
-
-                else ->
-                    currentDirectory
-            }
+            formatDirectoryForPrompt(
+                currentDirectory
+            )
 
         return "root@atlas:$displayDirectory#"
     }
 
+    fun getCurrentDirectory():
+            String {
+
+        return currentDirectory
+    }
+
+    /*
+     * ------------------------------------------------
+     * COMMAND EXECUTION
+     * ------------------------------------------------
+     */
     fun execute(
         command: String
     ): LinuxGuestCommandResult {
@@ -110,38 +133,48 @@ object LinuxShellMode {
                     command
                 )
 
-        if (
-            result is
-                    LinuxGuestCommandResult.Success
-        ) {
+        when (result) {
 
-            /*
-             * The guest shell is persistent.
-             *
-             * Stateful commands such as:
-             *
-             * cd /etc
-             *
-             * therefore change the working
-             * directory for subsequent commands.
-             */
-            refreshWorkingDirectory()
+            is LinuxGuestCommandResult.Success -> {
 
-        } else if (
-            ProotLinuxRuntimeBackend
-                .getProcess() == null
-        ) {
+                /*
+                 * Commands such as:
+                 *
+                 * cd /etc
+                 * cd /root/projects
+                 * cd ..
+                 *
+                 * can modify the persistent guest
+                 * working directory.
+                 */
+                refreshWorkingDirectory()
+            }
 
-            active =
-                false
+            is LinuxGuestCommandResult.Failure -> {
 
-            currentDirectory =
-                "/root"
+                /*
+                 * If execution failed because the
+                 * native process disappeared, clear
+                 * shell mode immediately.
+                 */
+                if (
+                    ProotLinuxRuntimeBackend
+                        .getProcess() == null
+                ) {
+
+                    reset()
+                }
+            }
         }
 
         return result
     }
 
+    /*
+     * ------------------------------------------------
+     * WORKING DIRECTORY
+     * ------------------------------------------------
+     */
     private fun refreshWorkingDirectory() {
 
         if (!active) {
@@ -159,8 +192,7 @@ object LinuxShellMode {
             is LinuxGuestCommandResult.Success -> {
 
                 val directory =
-                    result
-                        .output
+                    result.output
                         .lineSequence()
                         .map { line ->
 
@@ -177,19 +209,110 @@ object LinuxShellMode {
                 ) {
 
                     currentDirectory =
-                        directory
+                        normalizeDirectory(
+                            directory
+                        )
                 }
             }
 
             is LinuxGuestCommandResult.Failure -> {
 
-                /*
-                 * Keep the previous prompt path.
-                 *
-                 * The main command execution path
-                 * will report meaningful failures.
-                 */
+                if (
+                    ProotLinuxRuntimeBackend
+                        .getProcess() == null
+                ) {
+
+                    reset()
+                }
             }
         }
+    }
+
+    /*
+     * ------------------------------------------------
+     * PROMPT DIRECTORY FORMATTING
+     * ------------------------------------------------
+     *
+     * /root
+     *     ->
+     * ~
+     *
+     * /root/projects
+     *     ->
+     * ~/projects
+     *
+     * /etc
+     *     ->
+     * /etc
+     */
+    private fun formatDirectoryForPrompt(
+        directory: String
+    ): String {
+
+        val normalized =
+            normalizeDirectory(
+                directory
+            )
+
+        return when {
+
+            normalized ==
+                    "/root" -> {
+
+                "~"
+            }
+
+            normalized.startsWith(
+                "/root/"
+            ) -> {
+
+                "~" +
+                        normalized.removePrefix(
+                            "/root"
+                        )
+            }
+
+            else -> {
+
+                normalized
+            }
+        }
+    }
+
+    private fun normalizeDirectory(
+        directory: String
+    ): String {
+
+        val trimmed =
+            directory
+                .trim()
+
+        if (
+            trimmed.isBlank()
+        ) {
+
+            return "/root"
+        }
+
+        if (
+            trimmed == "/"
+        ) {
+
+            return "/"
+        }
+
+        return trimmed
+            .removeSuffix(
+                "/"
+            )
+    }
+
+    private fun reset() {
+
+        active =
+            false
+
+        currentDirectory =
+            "/root"
     }
 }
