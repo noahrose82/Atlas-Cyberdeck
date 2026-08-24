@@ -18,6 +18,7 @@ import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionParser
 import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionType
 import com.noahrose.pocketlab.feature.terminal.sequential.SequentialCommandEngine
 import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxInteractiveCommandGuard
 
 object TerminalCommandProcessor {
 
@@ -132,6 +133,51 @@ object TerminalCommandProcessor {
             }
 
             /*
+ * ------------------------------------------------
+ * INTERACTIVE / PTY COMMAND GUARD
+ * ------------------------------------------------
+ *
+ * Atlas currently uses a line-oriented command
+ * bridge.
+ *
+ * Applications such as nano, top, less, and
+ * passwd require a real pseudo-terminal.
+ */
+            if (
+                LinuxInteractiveCommandGuard
+                    .requiresPty(
+                        guestCommand
+                    )
+            ) {
+
+                if (showPrompt) {
+
+                    output.add(
+                        "${LinuxShellMode.getPrompt()} $guestCommand"
+                    )
+                }
+
+                LinuxInteractiveCommandGuard
+                    .message(
+                        guestCommand
+                    )
+                    .lines()
+                    .forEach { line ->
+
+                        output.add(
+                            line
+                        )
+                    }
+
+                ExecutionStatus
+                    .set(
+                        1
+                    )
+
+                return
+            }
+
+            /*
              * Show the Ubuntu prompt and entered command.
              */
             if (showPrompt) {
@@ -232,6 +278,8 @@ object TerminalCommandProcessor {
 
             return
         }
+
+
 
         /*
          * ------------------------------------------------
