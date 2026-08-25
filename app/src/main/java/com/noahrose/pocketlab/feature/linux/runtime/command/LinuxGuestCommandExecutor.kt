@@ -65,6 +65,32 @@ object LinuxGuestCommandExecutor {
                 )
         }
 
+        val packagePreparation =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    command
+                )
+
+        val preparedCommand =
+            when (
+                packagePreparation
+            ) {
+
+                is LinuxPackageCommandPreparation.Ready -> {
+
+                    packagePreparation.command
+                }
+
+                is LinuxPackageCommandPreparation.Blocked -> {
+
+                    return LinuxGuestCommandResult
+                        .Failure(
+                            message =
+                                packagePreparation.message
+                        )
+                }
+            }
+
         val timeoutMillis =
             determineTimeout(
                 command
@@ -91,7 +117,7 @@ object LinuxGuestCommandExecutor {
                 )
 
                 append(
-                    command
+                    preparedCommand
                 )
 
                 append(
@@ -505,33 +531,10 @@ object LinuxGuestCommandExecutor {
         command: String
     ): Boolean {
 
-        val trimmed =
-            command.trim()
-
-        if (
-            trimmed.isBlank()
-        ) {
-
-            return false
-        }
-
-        val executable =
-            trimmed
-                .substringBefore(
-                    " "
-                )
-                .substringAfterLast(
-                    "/"
-                )
-                .lowercase()
-
-        return executable in
-                setOf(
-                    "apt",
-                    "apt-get",
-                    "apt-cache",
-                    "dpkg"
-                )
+        return LinuxPackageCommandPolicy
+            .isPackageManagementCommand(
+                command
+            )
     }
 
     private fun buildTimeoutMessage(
