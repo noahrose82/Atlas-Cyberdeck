@@ -43,27 +43,14 @@ fun TerminalScreen(
     val uiState =
         terminalViewModel.uiState
 
-    /*
-     * ------------------------------------------------
-     * TERMINAL VISUAL MODE
-     * ------------------------------------------------
-     *
-     * Atlas shell:
-     *
-     * white/light background
-     * blue Atlas text
-     *
-     * Ubuntu shell:
-     *
-     * black background
-     * Matrix-green text
-     */
     val linuxShellActive =
         terminalViewModel
             .linuxShellActive
 
     val terminalBackground =
-        if (linuxShellActive) {
+        if (
+            linuxShellActive
+        ) {
 
             Color.Black
 
@@ -75,11 +62,10 @@ fun TerminalScreen(
         }
 
     val terminalTextColor =
-        if (linuxShellActive) {
+        if (
+            linuxShellActive
+        ) {
 
-            /*
-             * Classic Matrix-style terminal green.
-             */
             Color(
                 0xFF00FF41
             )
@@ -98,9 +84,6 @@ fun TerminalScreen(
     val listState =
         rememberLazyListState()
 
-    /*
-     * Keep the latest output visible.
-     */
     LaunchedEffect(
         uiState.output.size
     ) {
@@ -131,11 +114,6 @@ fun TerminalScreen(
                 )
     ) {
 
-        /*
-         * ------------------------------------------------
-         * TERMINAL OUTPUT
-         * ------------------------------------------------
-         */
         LazyColumn(
             modifier =
                 Modifier
@@ -169,20 +147,39 @@ fun TerminalScreen(
         }
 
         /*
-         * ------------------------------------------------
-         * LIVE TERMINAL INPUT
-         * ------------------------------------------------
+         * A silent Linux command should never make
+         * Atlas appear frozen.
+         *
+         * This indicator disappears automatically
+         * when commandRunning becomes false.
          */
+        if (
+            terminalViewModel
+                .commandRunning
+        ) {
+
+            Text(
+                text =
+                    "Running...",
+
+                color =
+                    terminalTextColor,
+
+                modifier =
+                    Modifier
+                        .padding(
+                            top =
+                                6.dp
+                        )
+            )
+        }
+
         BasicTextField(
             value =
                 uiState.currentCommand,
 
             onValueChange = { value ->
 
-                /*
-                 * Support keyboards that submit
-                 * newline characters directly.
-                 */
                 if (
                     value.contains(
                         "\n"
@@ -291,17 +288,6 @@ fun TerminalScreen(
                             .fillMaxWidth()
                 ) {
 
-                    /*
-                     * Live prompt.
-                     *
-                     * Atlas:
-                     *
-                     * atlas@cyberdeck:~$
-                     *
-                     * Ubuntu:
-                     *
-                     * root@atlas:~#
-                     */
                     Text(
                         text =
                             "$prompt ",

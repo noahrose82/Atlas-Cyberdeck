@@ -22,16 +22,13 @@ object LinuxShellMode {
     fun isActive():
             Boolean {
 
-        if (!active) {
+        if (
+            !active
+        ) {
+
             return false
         }
 
-        /*
-         * If the native Ubuntu process disappeared,
-         * shell mode must immediately collapse back
-         * to Atlas rather than leaving the terminal
-         * visually stuck in Linux mode.
-         */
         val process =
             ProotLinuxRuntimeBackend
                 .getProcess()
@@ -57,7 +54,10 @@ object LinuxShellMode {
                 .getProcess()
                 ?: return false
 
-        if (!process.isAlive) {
+        if (
+            !process.isAlive
+        ) {
+
             return false
         }
 
@@ -75,14 +75,9 @@ object LinuxShellMode {
     fun exit() {
 
         /*
-         * Leaving shell mode does NOT terminate
-         * Ubuntu.
-         *
-         * The persistent guest remains available
-         * for:
-         *
-         * linux exec
-         * linux shell
+         * Leaving shell mode does not terminate the
+         * Ubuntu runtime. The persistent guest remains
+         * available for linux exec / linux shell.
          */
         reset()
     }
@@ -113,12 +108,21 @@ object LinuxShellMode {
      * ------------------------------------------------
      * COMMAND EXECUTION
      * ------------------------------------------------
+     *
+     * Output callbacks fire while the guest command
+     * is still running. This is what allows the
+     * Compose terminal to display apt/dpkg output in
+     * real time.
      */
     fun execute(
-        command: String
+        command: String,
+        onOutputLine: ((String) -> Unit)? = null,
+        onErrorLine: ((String) -> Unit)? = null
     ): LinuxGuestCommandResult {
 
-        if (!isActive()) {
+        if (
+            !isActive()
+        ) {
 
             return LinuxGuestCommandResult
                 .Failure(
@@ -130,33 +134,31 @@ object LinuxShellMode {
         val result =
             LinuxGuestCommandExecutor
                 .execute(
-                    command
+                    command =
+                        command,
+
+                    onOutputLine =
+                        onOutputLine,
+
+                    onErrorLine =
+                        onErrorLine
                 )
 
-        when (result) {
+        when (
+            result
+        ) {
 
             is LinuxGuestCommandResult.Success -> {
 
                 /*
-                 * Commands such as:
-                 *
-                 * cd /etc
-                 * cd /root/projects
-                 * cd ..
-                 *
-                 * can modify the persistent guest
-                 * working directory.
+                 * Stateful guest commands can alter the
+                 * persistent working directory.
                  */
                 refreshWorkingDirectory()
             }
 
             is LinuxGuestCommandResult.Failure -> {
 
-                /*
-                 * If execution failed because the
-                 * native process disappeared, clear
-                 * shell mode immediately.
-                 */
                 if (
                     ProotLinuxRuntimeBackend
                         .getProcess() == null
@@ -177,7 +179,10 @@ object LinuxShellMode {
      */
     private fun refreshWorkingDirectory() {
 
-        if (!active) {
+        if (
+            !active
+        ) {
+
             return
         }
 
@@ -200,7 +205,9 @@ object LinuxShellMode {
                         }
                         .firstOrNull { line ->
 
-                            line.startsWith("/")
+                            line.startsWith(
+                                "/"
+                            )
                         }
 
                 if (
@@ -232,18 +239,6 @@ object LinuxShellMode {
      * ------------------------------------------------
      * PROMPT DIRECTORY FORMATTING
      * ------------------------------------------------
-     *
-     * /root
-     *     ->
-     * ~
-     *
-     * /root/projects
-     *     ->
-     * ~/projects
-     *
-     * /etc
-     *     ->
-     * /etc
      */
     private fun formatDirectoryForPrompt(
         directory: String
@@ -284,8 +279,7 @@ object LinuxShellMode {
     ): String {
 
         val trimmed =
-            directory
-                .trim()
+            directory.trim()
 
         if (
             trimmed.isBlank()
@@ -295,7 +289,8 @@ object LinuxShellMode {
         }
 
         if (
-            trimmed == "/"
+            trimmed ==
+            "/"
         ) {
 
             return "/"

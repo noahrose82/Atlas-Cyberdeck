@@ -3,6 +3,8 @@ package com.noahrose.pocketlab.feature.linux.runtime
 import android.util.Log
 import com.noahrose.pocketlab.feature.linux.runtime.handshake.LinuxGuestHandshake
 import com.noahrose.pocketlab.feature.linux.runtime.handshake.LinuxGuestHandshakeResult
+import com.noahrose.pocketlab.feature.linux.runtime.network.LinuxGuestDnsManager
+import com.noahrose.pocketlab.feature.linux.runtime.network.LinuxGuestDnsSyncResult
 import com.noahrose.pocketlab.feature.linux.runtime.process.AndroidLinuxProcessLauncher
 import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxProcessHandle
 import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxProcessLaunchResult
@@ -18,6 +20,9 @@ object ProotLinuxRuntimeBackend :
 
     private const val GUEST_TAG =
         "AtlasGuest"
+
+    private const val DNS_TAG =
+        "AtlasDns"
 
     private val processLauncher =
         AndroidLinuxProcessLauncher()
@@ -40,10 +45,6 @@ object ProotLinuxRuntimeBackend :
 
     /*
      * Last runtime startup/shutdown error.
-     *
-     * LinuxViewModel uses this to surface useful
-     * feedback instead of silently returning
-     * START_FAILED or STOP_FAILED.
      */
     private var lastError:
             String? =
@@ -144,7 +145,9 @@ object ProotLinuxRuntimeBackend :
                 .create()
 
         val spec =
-            when (specResult) {
+            when (
+                specResult
+            ) {
 
                 is LinuxProotProcessSpecResult.Ready -> {
 
@@ -168,6 +171,78 @@ object ProotLinuxRuntimeBackend :
                         )
                 }
             }
+
+        /*
+         * ------------------------------------------------
+         * UBUNTU DNS SYNCHRONIZATION
+         * ------------------------------------------------
+         *
+         * LinuxProotProcessSpec currently uses the
+         * Ubuntu rootfs as its working directory.
+         *
+         * Before PRoot launches, synchronize
+         * Android's active DNS servers into:
+         *
+         * rootfs/etc/resolv.conf
+         *
+         * DNS synchronization failure does NOT
+         * prevent Ubuntu from starting. Atlas may
+         * still be intentionally operating offline.
+         */
+        val rootfsDirectory =
+            spec.workingDirectory
+
+        if (
+            rootfsDirectory != null
+        ) {
+
+            when (
+                val dnsResult =
+                    LinuxGuestDnsManager
+                        .synchronize(
+                            rootfsDirectory
+                        )
+            ) {
+
+                is LinuxGuestDnsSyncResult.Success -> {
+
+                    Log.i(
+                        DNS_TAG,
+                        "Ubuntu DNS synchronized: ${
+                            dnsResult
+                                .dnsServers
+                                .joinToString(
+                                    ", "
+                                )
+                        }"
+                    )
+                }
+
+                is LinuxGuestDnsSyncResult.Skipped -> {
+
+                    Log.w(
+                        DNS_TAG,
+                        "Ubuntu DNS synchronization skipped: ${dnsResult.message}"
+                    )
+                }
+
+                is LinuxGuestDnsSyncResult.Failure -> {
+
+                    Log.w(
+                        DNS_TAG,
+                        "Ubuntu DNS synchronization failed: ${dnsResult.message}",
+                        dnsResult.cause
+                    )
+                }
+            }
+
+        } else {
+
+            Log.w(
+                DNS_TAG,
+                "Ubuntu DNS synchronization skipped because the rootfs directory is unavailable."
+            )
+        }
 
         /*
          * Launch diagnostics.
@@ -203,7 +278,9 @@ object ProotLinuxRuntimeBackend :
             "PROOT_LOADER: ${loaderPath ?: "NOT SET"}"
         )
 
-        if (loaderPath != null) {
+        if (
+            loaderPath != null
+        ) {
 
             val loaderFile =
                 File(
@@ -217,7 +294,9 @@ object ProotLinuxRuntimeBackend :
                         "file=${loaderFile.isFile} " +
                         "executable=${loaderFile.canExecute()} " +
                         "size=${
-                            if (loaderFile.exists()) {
+                            if (
+                                loaderFile.exists()
+                            ) {
                                 loaderFile.length()
                             } else {
                                 0L
@@ -252,11 +331,10 @@ object ProotLinuxRuntimeBackend :
                 /*
                  * ProcessBuilder.start() only proves
                  * that Android created the process.
-                 *
-                 * It does not yet prove Ubuntu is
-                 * actually executing.
                  */
-                if (!process.isAlive) {
+                if (
+                    !process.isAlive
+                ) {
 
                     val message =
                         "PRoot process exited immediately after launch."
@@ -301,12 +379,10 @@ object ProotLinuxRuntimeBackend :
                 )
 
                 /*
-                 * A living PRoot process is not
-                 * sufficient evidence that Ubuntu
-                 * itself is functional.
+                 * A living PRoot process alone does
+                 * not prove Ubuntu itself works.
                  *
-                 * Execute a real guest handshake
-                 * through stdin/stdout.
+                 * Execute a real guest handshake.
                  */
                 Log.i(
                     GUEST_TAG,
@@ -331,7 +407,9 @@ object ProotLinuxRuntimeBackend :
                             .lines()
                             .forEach { line ->
 
-                                if (line.isNotBlank()) {
+                                if (
+                                    line.isNotBlank()
+                                ) {
 
                                     Log.i(
                                         GUEST_TAG,
@@ -365,14 +443,10 @@ object ProotLinuxRuntimeBackend :
                          * Ubuntu has now proven:
                          *
                          * - guest shell execution
-                         * - uid=0 root identity
+                         * - uid=0 identity
                          * - /root working directory
                          * - ARM64 architecture
                          * - Ubuntu OS identity
-                         *
-                         * Only now may Atlas report
-                         * the runtime as successfully
-                         * started.
                          */
                         val session =
                             LinuxRuntimeSession(
@@ -462,7 +536,9 @@ object ProotLinuxRuntimeBackend :
                          */
                         runCatching {
 
-                            if (process.isAlive) {
+                            if (
+                                process.isAlive
+                            ) {
 
                                 process.forceStop()
                             }
@@ -528,7 +604,9 @@ object ProotLinuxRuntimeBackend :
         val process =
             activeProcess
 
-        if (process == null) {
+        if (
+            process == null
+        ) {
 
             activeSession =
                 null
@@ -547,7 +625,9 @@ object ProotLinuxRuntimeBackend :
 
         return try {
 
-            if (process.isAlive) {
+            if (
+                process.isAlive
+            ) {
 
                 Log.i(
                     TAG,
@@ -561,7 +641,9 @@ object ProotLinuxRuntimeBackend :
                  * immediately stop the runtime,
                  * force termination.
                  */
-                if (process.isAlive) {
+                if (
+                    process.isAlive
+                ) {
 
                     Log.w(
                         TAG,
@@ -589,7 +671,9 @@ object ProotLinuxRuntimeBackend :
             LinuxRuntimeBackendResult
                 .Success()
 
-        } catch (exception: Exception) {
+        } catch (
+            exception: Exception
+        ) {
 
             val message =
                 exception.message
@@ -615,9 +699,6 @@ object ProotLinuxRuntimeBackend :
     /*
      * Returns true only when Atlas currently owns
      * a living native PRoot process.
-     *
-     * Dead process/session references are cleaned
-     * automatically.
      */
     fun isProcessAlive():
             Boolean {
@@ -627,7 +708,9 @@ object ProotLinuxRuntimeBackend :
                 ?.isAlive
                 ?: false
 
-        if (!alive) {
+        if (
+            !alive
+        ) {
 
             activeProcess =
                 null
@@ -640,11 +723,8 @@ object ProotLinuxRuntimeBackend :
     }
 
     /*
-     * Exposes the live process handle for the
-     * upcoming interactive Ubuntu command bridge.
-     *
-     * F3P-E will use this handle to communicate
-     * with the already-running Ubuntu shell.
+     * Exposes the live native process to the
+     * persistent Ubuntu command bridge.
      */
     fun getProcess():
             LinuxProcessHandle? {
@@ -653,7 +733,9 @@ object ProotLinuxRuntimeBackend :
             activeProcess
                 ?: return null
 
-        return if (process.isAlive) {
+        return if (
+            process.isAlive
+        ) {
 
             process
 

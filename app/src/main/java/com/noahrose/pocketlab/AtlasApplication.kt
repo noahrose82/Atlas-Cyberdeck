@@ -2,6 +2,7 @@ package com.noahrose.pocketlab
 
 import android.app.Application
 import com.noahrose.pocketlab.feature.filesystem.persistence.PersistenceManager
+import com.noahrose.pocketlab.feature.linux.runtime.network.LinuxGuestDnsManager
 import com.noahrose.pocketlab.feature.system.DeviceInfoProvider
 import com.noahrose.pocketlab.feature.system.bootstrap.DeviceBootstrapManager
 import com.noahrose.pocketlab.feature.system.bootstrap.DeviceProfilePersistence
@@ -39,6 +40,16 @@ class AtlasApplication : Application() {
          * Device profile persistence.
          */
         DeviceProfilePersistence.initialize(
+            this
+        )
+
+        /*
+         * Ubuntu guest DNS synchronization.
+         *
+         * Makes Android's active DNS configuration
+         * available to the rootless Ubuntu runtime.
+         */
+        LinuxGuestDnsManager.initialize(
             this
         )
 

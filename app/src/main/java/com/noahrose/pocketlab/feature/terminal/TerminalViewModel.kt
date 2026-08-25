@@ -4,10 +4,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
 import com.noahrose.pocketlab.feature.terminal.completion.CommandCompletion
 import com.noahrose.pocketlab.feature.terminal.startup.AtlasRcManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class TerminalViewModel : ViewModel() {
 
@@ -16,41 +21,21 @@ class TerminalViewModel : ViewModel() {
     )
         private set
 
+    var commandRunning by mutableStateOf(
+        false
+    )
+        private set
+
     init {
         loadStartupConfiguration()
     }
 
-    /*
-     * ------------------------------------------------
-     * CURRENT TERMINAL MODE
-     * ------------------------------------------------
-     *
-     * LinuxShellMode remains the single source
-     * of truth for whether the terminal is
-     * currently connected to the Ubuntu shell.
-     */
     val linuxShellActive:
             Boolean
         get() =
             LinuxShellMode
                 .isActive()
 
-    /*
-     * ------------------------------------------------
-     * LIVE PROMPT
-     * ------------------------------------------------
-     *
-     * Atlas:
-     *
-     * atlas@cyberdeck:~$
-     *
-     * Ubuntu:
-     *
-     * root@atlas:~#
-     *
-     * Ubuntu working-directory changes are
-     * reflected automatically by LinuxShellMode.
-     */
     val prompt:
             String
         get() {
@@ -88,7 +73,9 @@ class TerminalViewModel : ViewModel() {
                         output
                 )
 
-        if (executed) {
+        if (
+            executed
+        ) {
 
             uiState =
                 uiState.copy(
@@ -112,13 +99,8 @@ class TerminalViewModel : ViewModel() {
     fun completeCommand() {
 
         /*
-         * Atlas completion understands Atlas
-         * commands and the Atlas virtual
-         * filesystem.
-         *
-         * Do not apply Atlas completion rules
-         * while commands are being sent to the
-         * real Ubuntu guest.
+         * Atlas completion must not rewrite commands
+         * while the real Ubuntu shell owns the input.
          */
         if (
             LinuxShellMode
@@ -146,7 +128,25 @@ class TerminalViewModel : ViewModel() {
         }
     }
 
+    /*
+     * ------------------------------------------------
+     * COMMAND EXECUTION
+     * ------------------------------------------------
+     *
+     * TerminalCommandProcessor runs on Dispatchers.IO.
+     *
+     * A per-command Channel transports live guest
+     * output back to the main thread while apt/dpkg
+     * is still running.
+     */
     fun executeCommand() {
+
+        if (
+            commandRunning
+        ) {
+
+            return
+        }
 
         val command =
             uiState
@@ -160,43 +160,103 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        val output =
+        val startingOutput =
             uiState
                 .output
-                .toMutableList()
+                .toList()
 
         /*
-         * TerminalCommandProcessor determines
-         * whether the command belongs to the
-         * Atlas shell or Ubuntu shell.
-         */
-        TerminalCommandProcessor
-            .process(
-                command =
-                    command,
-
-                output =
-                    output
-            )
-
-        /*
-         * Updating Compose state forces the
-         * terminal to redraw immediately after:
-         *
-         * linux shell
-         * cd
-         * exit
-         *
-         * The live prompt and terminal colors
-         * therefore follow the current shell.
+         * Clear the input immediately so the terminal
+         * acknowledges Enter without waiting for the
+         * guest command to finish.
          */
         uiState =
             uiState.copy(
-                output =
-                    output,
-
                 currentCommand =
                     ""
             )
+
+        commandRunning =
+            true
+
+        viewModelScope
+            .launch {
+
+                val liveOutput =
+                    Channel<String>(
+                        capacity =
+                            Channel.UNLIMITED
+                    )
+
+                /*
+                 * Runs on the main thread and updates
+                 * Compose state one line at a time.
+                 */
+                val liveOutputJob =
+                    launch {
+
+                        for (
+                        line in
+                        liveOutput
+                        ) {
+
+                            uiState =
+                                uiState.copy(
+                                    output =
+                                        uiState.output +
+                                                line
+                                )
+                        }
+                    }
+
+                val processedOutput =
+                    withContext(
+                        Dispatchers.IO
+                    ) {
+
+                        val output =
+                            startingOutput
+                                .toMutableList()
+
+                        TerminalCommandProcessor
+                            .process(
+                                command =
+                                    command,
+
+                                output =
+                                    output,
+
+                                onLiveOutput = { line ->
+
+                                    liveOutput
+                                        .trySend(
+                                            line
+                                        )
+                                }
+                            )
+
+                        output
+                    }
+
+                /*
+                 * Drain every queued line before the
+                 * final canonical output list replaces
+                 * the temporary streamed UI state.
+                 */
+                liveOutput
+                    .close()
+
+                liveOutputJob
+                    .join()
+
+                uiState =
+                    uiState.copy(
+                        output =
+                            processedOutput
+                    )
+
+                commandRunning =
+                    false
+            }
     }
 }

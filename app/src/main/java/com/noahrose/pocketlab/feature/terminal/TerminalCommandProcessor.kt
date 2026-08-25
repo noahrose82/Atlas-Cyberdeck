@@ -26,17 +26,18 @@ object TerminalCommandProcessor {
         command: String,
         output: MutableList<String>,
         recordHistory: Boolean = true,
-        showPrompt: Boolean = true
+        showPrompt: Boolean = true,
+        onLiveOutput: ((String) -> Unit)? = null
     ) {
 
         /*
- * ------------------------------------------------
- * REAL UBUNTU SHELL MODE
- * ------------------------------------------------
- *
- * This path intentionally runs before the Atlas
- * parser so Ubuntu receives its own shell syntax.
- */
+         * ------------------------------------------------
+         * REAL UBUNTU SHELL MODE
+         * ------------------------------------------------
+         *
+         * This path intentionally runs before the Atlas
+         * parser so Ubuntu receives its own shell syntax.
+         */
         if (
             LinuxShellMode
                 .isActive()
@@ -44,6 +45,26 @@ object TerminalCommandProcessor {
 
             val guestCommand =
                 command.trim()
+
+            /*
+             * Adds the line to the canonical command
+             * output list and, when a live consumer is
+             * attached, immediately forwards it to the
+             * Compose terminal.
+             */
+            fun emitShellLine(
+                line: String
+            ) {
+
+                output.add(
+                    line
+                )
+
+                onLiveOutput
+                    ?.invoke(
+                        line
+                    )
+            }
 
             if (
                 recordHistory &&
@@ -56,9 +77,6 @@ object TerminalCommandProcessor {
                     )
             }
 
-            /*
-             * Blank Enter.
-             */
             if (
                 guestCommand.isBlank()
             ) {
@@ -70,9 +88,6 @@ object TerminalCommandProcessor {
              * ------------------------------------------------
              * EXIT UBUNTU MODE
              * ------------------------------------------------
-             *
-             * Do NOT send this into the persistent Ubuntu
-             * /bin/sh process.
              */
             if (
                 guestCommand.equals(
@@ -81,9 +96,11 @@ object TerminalCommandProcessor {
                 )
             ) {
 
-                if (showPrompt) {
+                if (
+                    showPrompt
+                ) {
 
-                    output.add(
+                    emitShellLine(
                         "${LinuxShellMode.getPrompt()} exit"
                     )
                 }
@@ -96,7 +113,7 @@ object TerminalCommandProcessor {
                         0
                     )
 
-                output.add(
+                emitShellLine(
                     "Welcome back to Atlas shell."
                 )
 
@@ -107,13 +124,6 @@ object TerminalCommandProcessor {
              * ------------------------------------------------
              * CLEAR
              * ------------------------------------------------
-             *
-             * A real shell would emit terminal control
-             * sequences. Atlas Terminal currently renders
-             * line-oriented output instead of interpreting
-             * ANSI screen-control sequences.
-             *
-             * Handle clear directly at the UI layer.
              */
             if (
                 guestCommand.equals(
@@ -133,16 +143,10 @@ object TerminalCommandProcessor {
             }
 
             /*
- * ------------------------------------------------
- * INTERACTIVE / PTY COMMAND GUARD
- * ------------------------------------------------
- *
- * Atlas currently uses a line-oriented command
- * bridge.
- *
- * Applications such as nano, top, less, and
- * passwd require a real pseudo-terminal.
- */
+             * ------------------------------------------------
+             * INTERACTIVE / PTY COMMAND GUARD
+             * ------------------------------------------------
+             */
             if (
                 LinuxInteractiveCommandGuard
                     .requiresPty(
@@ -150,9 +154,11 @@ object TerminalCommandProcessor {
                     )
             ) {
 
-                if (showPrompt) {
+                if (
+                    showPrompt
+                ) {
 
-                    output.add(
+                    emitShellLine(
                         "${LinuxShellMode.getPrompt()} $guestCommand"
                     )
                 }
@@ -164,7 +170,7 @@ object TerminalCommandProcessor {
                     .lines()
                     .forEach { line ->
 
-                        output.add(
+                        emitShellLine(
                             line
                         )
                     }
@@ -178,11 +184,14 @@ object TerminalCommandProcessor {
             }
 
             /*
-             * Show the Ubuntu prompt and entered command.
+             * The entered command appears immediately,
+             * before Ubuntu begins producing output.
              */
-            if (showPrompt) {
+            if (
+                showPrompt
+            ) {
 
-                output.add(
+                emitShellLine(
                     "${LinuxShellMode.getPrompt()} $guestCommand"
                 )
             }
@@ -191,7 +200,22 @@ object TerminalCommandProcessor {
                 val result =
                     LinuxShellMode
                         .execute(
-                            guestCommand
+                            command =
+                                guestCommand,
+
+                            onOutputLine = { line ->
+
+                                emitShellLine(
+                                    line
+                                )
+                            },
+
+                            onErrorLine = { line ->
+
+                                emitShellLine(
+                                    line
+                                )
+                            }
                         )
             ) {
 
@@ -201,36 +225,6 @@ object TerminalCommandProcessor {
                         .set(
                             result.exitCode
                         )
-
-                    if (
-                        result.output
-                            .isNotBlank()
-                    ) {
-
-                        result.output
-                            .lines()
-                            .forEach { line ->
-
-                                output.add(
-                                    line
-                                )
-                            }
-                    }
-
-                    if (
-                        result.errorOutput
-                            .isNotBlank()
-                    ) {
-
-                        result.errorOutput
-                            .lines()
-                            .forEach { line ->
-
-                                output.add(
-                                    line
-                                )
-                            }
-                    }
                 }
 
                 is LinuxGuestCommandResult.Failure -> {
@@ -240,39 +234,13 @@ object TerminalCommandProcessor {
                             1
                         )
 
-                    output.add(
+                    /*
+                     * stdout/stderr already streamed
+                     * through the callbacks above.
+                     */
+                    emitShellLine(
                         "linux: ${result.message}"
                     )
-
-                    if (
-                        result.output
-                            .isNotBlank()
-                    ) {
-
-                        result.output
-                            .lines()
-                            .forEach { line ->
-
-                                output.add(
-                                    line
-                                )
-                            }
-                    }
-
-                    if (
-                        result.errorOutput
-                            .isNotBlank()
-                    ) {
-
-                        result.errorOutput
-                            .lines()
-                            .forEach { line ->
-
-                                output.add(
-                                    line
-                                )
-                            }
-                    }
                 }
             }
 
@@ -367,7 +335,10 @@ object TerminalCommandProcessor {
                         false,
 
                     showPrompt =
-                        showPrompt
+                        showPrompt,
+
+                    onLiveOutput =
+                        onLiveOutput
                 )
             }
         ) {
@@ -747,7 +718,10 @@ object TerminalCommandProcessor {
                             false,
 
                         showPrompt =
-                            showPrompt
+                            showPrompt,
+
+                        onLiveOutput =
+                            onLiveOutput
                     )
                 }
             }
@@ -823,7 +797,10 @@ object TerminalCommandProcessor {
                                     false,
 
                                 showPrompt =
-                                    showPrompt
+                                    showPrompt,
+
+                                onLiveOutput =
+                                    onLiveOutput
                             )
                         }
                     }
@@ -866,7 +843,10 @@ object TerminalCommandProcessor {
                                 false,
 
                             showPrompt =
-                                showPrompt
+                                showPrompt,
+
+                            onLiveOutput =
+                                onLiveOutput
                         )
                     }
                 }
