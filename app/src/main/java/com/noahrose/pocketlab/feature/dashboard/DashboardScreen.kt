@@ -421,7 +421,7 @@ fun DashboardScreen(
 
             Text(
                 text =
-                    "Atlas Cyberdeck v0.5.1 \"Forge\""
+                    "Atlas Cyberdeck v0.13.0-alpha \"Forge\""
             )
         }
     }

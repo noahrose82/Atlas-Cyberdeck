@@ -52,6 +52,10 @@ Atlas is being built for developers, cybersecurity students and professionals, s
 
 Atlas can start its Linux runtime and enter a persistent Ubuntu shell directly from the Atlas terminal.
 
+<p align="center">
+  <img src="docs/images/runtime-showcase.png" alt="Atlas Cyberdeck runtime showcase" width="100%">
+</p>
+
 ### Start the runtime
 
 ```console
@@ -132,6 +136,10 @@ Running a Linux userspace inside Android creates failure modes that ordinary ter
 | 🟢 **NORMAL** | Enabled | Standard Linux operation |
 | 🟡 **SAFE_MODE** | Blocked | Fail closed after a serious runtime, filesystem, package, or integrity failure |
 | 🟠 **RECOVERY_ARMED** | Recovery only | Allow controlled repair while restricting guest commands |
+
+<p align="center">
+  <img src="docs/images/safety-recovery-showcase.png" alt="Atlas Cyberdeck Safe Mode and controlled recovery" width="100%">
+</p>
 
 ### Safety commands
 
@@ -327,28 +335,62 @@ Safety identity takes precedence over normal shell identity so the user can imme
 
 # Screenshots
 
+<p align="center">
+  <img src="docs/images/product-journey.png" alt="Atlas Cyberdeck real-device product journey" width="100%">
+</p>
+
 <table>
 <tr>
 <td width="50%" align="center">
-<strong>Dashboard</strong><br><br>
-<img src="docs/screenshots/dashboard.png" alt="Atlas Cyberdeck Dashboard">
+<strong>Dashboard — Linux Running</strong><br><br>
+<img src="docs/screenshots/dashboard-device.png" alt="Atlas Cyberdeck dashboard with Linux runtime running">
 </td>
 <td width="50%" align="center">
-<strong>Terminal</strong><br><br>
-<img src="docs/screenshots/terminal.png" alt="Atlas Cyberdeck Terminal">
+<strong>Ubuntu 24.04.4 LTS on Android</strong><br><br>
+<img src="docs/screenshots/terminal-ubuntu-device.png" alt="Ubuntu ARM64 shell running inside Atlas Cyberdeck on Android">
 </td>
 </tr>
 <tr>
 <td width="50%" align="center">
-<strong>Virtual File System</strong><br><br>
-<img src="docs/screenshots/filesystem.png" alt="Atlas Cyberdeck Virtual File System">
+<strong>Atlas Terminal</strong><br><br>
+<img src="docs/screenshots/terminal-atlas-device.png" alt="Atlas Cyberdeck terminal showing system identity and runtime status">
 </td>
 <td width="50%" align="center">
-<strong>Boot Experience</strong><br><br>
-<img src="docs/screenshots/boot.png" alt="Atlas Cyberdeck Boot Screen">
+<strong>Linux Manager</strong><br><br>
+<img src="docs/screenshots/linux-manager.png" alt="Atlas Cyberdeck Linux Manager showing Ubuntu package and storage metrics">
+</td>
+</tr>
+<tr>
+<td width="50%" align="center">
+<strong>Safe Mode</strong><br><br>
+<img src="docs/screenshots/safe-mode-device.png" alt="Atlas Cyberdeck Safe Mode">
+</td>
+<td width="50%" align="center">
+<strong>Controlled Recovery</strong><br><br>
+<img src="docs/screenshots/recovery-mode-device.png" alt="Atlas Cyberdeck Recovery Mode">
 </td>
 </tr>
 </table>
+
+<details>
+<summary><strong>Additional real-device captures</strong></summary>
+
+<br>
+
+<table>
+<tr>
+<td width="50%" align="center">
+<strong>Boot Experience</strong><br><br>
+<img src="docs/screenshots/boot-device.png" alt="Atlas Cyberdeck boot and device capability checks">
+</td>
+<td width="50%" align="center">
+<strong>Clean Ubuntu Runtime Capture</strong><br><br>
+<img src="docs/screenshots/terminal-ubuntu-clean.png" alt="Clean Ubuntu 24.04.4 LTS ARM64 terminal output">
+</td>
+</tr>
+</table>
+
+</details>
 
 ---
 

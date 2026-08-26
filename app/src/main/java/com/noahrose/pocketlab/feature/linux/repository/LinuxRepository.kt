@@ -99,6 +99,41 @@ object LinuxRepository {
         persistInstallation()
     }
 
+    fun updateMetrics(
+        packageCount: Int,
+        storageUsedMb: Long
+    ) {
+
+        val current =
+            _installation.value
+
+        if (!current.installed) {
+            return
+        }
+
+        _installation.value =
+            current.copy(
+                packageCount =
+                    packageCount
+                        .coerceAtLeast(
+                            0
+                        ),
+
+                storageUsedMb =
+                    storageUsedMb
+                        .coerceAtLeast(
+                            0L
+                        )
+            )
+
+        /*
+         * Metrics describe the persistent Ubuntu
+         * installation and are safe to restore on
+         * the next application launch.
+         */
+        persistInstallation()
+    }
+
     fun startInstallation() {
 
         val current =
@@ -140,12 +175,9 @@ object LinuxRepository {
                         false,
 
                     /*
-                     * Package count and storage usage
-                     * are no longer simulated.
-                     *
-                     * Real metrics can be populated
-                     * later from the provisioned
-                     * Ubuntu environment.
+                     * The RootFS metrics reader
+                     * replaces these temporary zeros
+                     * immediately after provisioning.
                      */
                     packageCount =
                         0,
@@ -286,12 +318,6 @@ object LinuxRepository {
             )
                 ?: "24.04 LTS"
 
-        /*
-         * No simulated fallback values.
-         *
-         * If real metrics have never been recorded,
-         * Atlas correctly restores them as zero.
-         */
         val packageCount =
             prefs.getInt(
                 KEY_PACKAGE_COUNT,

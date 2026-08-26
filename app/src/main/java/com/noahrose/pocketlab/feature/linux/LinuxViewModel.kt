@@ -11,6 +11,7 @@ import com.noahrose.pocketlab.feature.linux.rootfs.provision.LinuxRootfsProvisio
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
 import com.noahrose.pocketlab.feature.linux.runtime.ProotLinuxRuntimeBackend
+import com.noahrose.pocketlab.feature.linux.runtime.metrics.LinuxInstallationMetricsReader
 import com.noahrose.pocketlab.feature.system.bootstrap.DeviceBootstrapManager
 import com.noahrose.pocketlab.feature.system.capability.AtlasFeature
 import kotlinx.coroutines.Dispatchers
@@ -78,6 +79,17 @@ class LinuxViewModel : ViewModel() {
 
     val runtimeBusy: State<Boolean> =
         _runtimeBusy
+
+    /*
+     * RootFS storage measurement walks the Ubuntu
+     * filesystem and must remain off the UI thread.
+     *
+     * This guard prevents overlapping scans when the
+     * Linux screen resumes while another refresh is
+     * already running.
+     */
+    private var metricsRefreshInProgress =
+        false
 
     fun installLinux() {
 
@@ -167,6 +179,7 @@ class LinuxViewModel : ViewModel() {
                         .completeInstallation()
 
                     refreshInstallation()
+                    refreshInstallationMetrics()
                 }
 
                 is LinuxRootfsProvisionResult.Failure -> {
@@ -215,6 +228,7 @@ class LinuxViewModel : ViewModel() {
                 }
 
             refreshInstallation()
+            refreshInstallationMetrics()
 
             _runtimeMessage.value =
                 when (result) {
@@ -273,6 +287,7 @@ class LinuxViewModel : ViewModel() {
                 }
 
             refreshInstallation()
+            refreshInstallationMetrics()
 
             _runtimeMessage.value =
                 when (result) {
@@ -359,12 +374,66 @@ class LinuxViewModel : ViewModel() {
             .getSession()
 
         refreshInstallation()
+        refreshInstallationMetrics()
     }
 
     fun clearRuntimeMessage() {
 
         _runtimeMessage.value =
             null
+    }
+
+    private fun refreshInstallationMetrics() {
+
+        val current =
+            LinuxRepository
+                .getInstallation()
+
+        if (
+            !current.installed ||
+            current.isInstalling ||
+            metricsRefreshInProgress
+        ) {
+            return
+        }
+
+        metricsRefreshInProgress =
+            true
+
+        viewModelScope.launch {
+
+            try {
+
+                val metrics =
+                    withContext(
+                        Dispatchers.IO
+                    ) {
+
+                        LinuxInstallationMetricsReader
+                            .read()
+                    }
+
+                metrics
+                    ?.let { measured ->
+
+                        LinuxRepository
+                            .updateMetrics(
+                                packageCount =
+                                    measured.packageCount,
+
+                                storageUsedMb =
+                                    measured.storageUsedMb
+                            )
+
+                        refreshInstallation()
+                    }
+
+            } finally {
+
+                metricsRefreshInProgress =
+                    false
+            }
+        }
     }
 
     private fun updateInstallation(
