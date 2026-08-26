@@ -230,4 +230,335 @@ class LinuxPackageCommandPolicyTest {
                     LinuxPackageCommandPreparation.Blocked
         )
     }
+
+    @Test
+    fun aptInstallReceivesPostTransactionDpkgAudit() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "apt install -y python3"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertTrue(
+                    result.command.contains(
+                        "dpkg --audit"
+                    )
+                )
+
+                assertTrue(
+                    result.command.contains(
+                        "__atlas_pkg_exit"
+                    )
+                )
+
+                assertTrue(
+                    result.command.contains(
+                        "Atlas package health warning"
+                    )
+                )
+
+                assertTrue(
+                    result.command.contains(
+                        "Atlas package health: CLEAN"
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "apt install -y should be allowed and audited."
+                )
+            }
+        }
+    }
+
+    @Test
+    fun aptUpdateDoesNotReceivePackageDatabaseAudit() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "apt update"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertTrue(
+                    result.hardened
+                )
+
+                assertFalse(
+                    result.command.contains(
+                        "__atlas_pkg_audit="
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "apt update should not be blocked."
+                )
+            }
+        }
+    }
+
+    @Test
+    fun dpkgConfigureReceivesPostTransactionAudit() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "dpkg --configure -a"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertTrue(
+                    result.command.contains(
+                        "__atlas_pkg_audit="
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "dpkg --configure -a should be allowed."
+                )
+            }
+        }
+    }
+
+    @Test
+    fun dpkgAuditDoesNotRecursivelyAddPostTransactionAudit() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "dpkg --audit"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertTrue(
+                    result.hardened
+                )
+
+                assertFalse(
+                    result.command.contains(
+                        "__atlas_pkg_audit="
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "dpkg --audit should not be blocked."
+                )
+            }
+        }
+    }
+
+    @Test
+    fun dpkgInstallReceivesPostTransactionAudit() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "dpkg -i package.deb"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertTrue(
+                    result.command.contains(
+                        "__atlas_pkg_audit="
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "dpkg -i should not be blocked."
+                )
+            }
+        }
+    }
+
+
+    @Test
+    fun normalAptMutationReceivesPreTransactionHealthGate() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "apt install -y python3"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertTrue(
+                    result.command.contains(
+                        "__atlas_pkg_pre_audit="
+                    )
+                )
+
+                assertTrue(
+                    result.command.contains(
+                        "Atlas package preflight: CLEAN"
+                    )
+                )
+
+                assertTrue(
+                    result.command.contains(
+                        "Atlas package preflight: BLOCKED"
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "apt install -y should reach the package health gate."
+                )
+            }
+        }
+    }
+
+    @Test
+    fun aptUpdateDoesNotReceivePreTransactionHealthGate() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "apt update"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertFalse(
+                    result.command.contains(
+                        "__atlas_pkg_pre_audit="
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "apt update should not be blocked."
+                )
+            }
+        }
+    }
+
+    @Test
+    fun dpkgConfigureBypassesPreflightSoItCanRepairDegradedState() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "dpkg --configure -a"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertFalse(
+                    result.command.contains(
+                        "__atlas_pkg_pre_audit="
+                    )
+                )
+
+                assertTrue(
+                    result.command.contains(
+                        "__atlas_pkg_audit="
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "dpkg --configure -a must remain available for recovery."
+                )
+            }
+        }
+    }
+
+    @Test
+    fun aptFixBrokenInstallBypassesPreflightButKeepsPostAudit() {
+
+        val result =
+            LinuxPackageCommandPolicy
+                .prepare(
+                    "apt --fix-broken install -y"
+                )
+
+        when (
+            result
+        ) {
+
+            is LinuxPackageCommandPreparation.Ready -> {
+
+                assertFalse(
+                    result.command.contains(
+                        "__atlas_pkg_pre_audit="
+                    )
+                )
+
+                assertTrue(
+                    result.command.contains(
+                        "__atlas_pkg_audit="
+                    )
+                )
+            }
+
+            is LinuxPackageCommandPreparation.Blocked -> {
+
+                fail(
+                    "apt --fix-broken install -y must remain available for recovery."
+                )
+            }
+        }
+    }
+
 }

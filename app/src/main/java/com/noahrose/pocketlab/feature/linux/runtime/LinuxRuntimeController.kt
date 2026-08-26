@@ -1,6 +1,7 @@
 package com.noahrose.pocketlab.feature.linux.runtime
 
 import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
 import com.noahrose.pocketlab.feature.system.bootstrap.DeviceBootstrapManager
 import com.noahrose.pocketlab.feature.system.capability.AtlasFeature
 
@@ -22,6 +23,42 @@ object LinuxRuntimeController {
 
     fun getSession():
             LinuxRuntimeSession? {
+
+        /*
+         * SAFE_MODE is authoritative.
+         *
+         * Never expose a logical runtime session while
+         * the circuit breaker says normal runtime use is
+         * blocked.
+         */
+        if (
+            !LinuxRuntimeCircuitBreaker
+                .canStartRuntime()
+        ) {
+
+            activeSession =
+                null
+
+            if (
+                !ProotLinuxRuntimeBackend
+                    .isProcessAlive()
+            ) {
+
+                val installation =
+                    LinuxRepository
+                        .getInstallation()
+
+                if (
+                    installation.running
+                ) {
+
+                    LinuxRepository
+                        .stopLinux()
+                }
+            }
+
+            return null
+        }
 
         /*
          * Do not expose a stale session if the
@@ -69,6 +106,48 @@ object LinuxRuntimeController {
 
             return LinuxRuntimeControlResult
                 .NOT_INSTALLED
+        }
+
+        /*
+         * ------------------------------------------------
+         * PRIMARY RUNTIME SAFETY GATE
+         * ------------------------------------------------
+         *
+         * Every normal runtime start request flows through
+         * LinuxRuntimeController. SAFE_MODE must therefore
+         * be enforced HERE before stale-state reconciliation,
+         * feature checks, or backend launch.
+         *
+         * RECOVERY_ARMED is intentionally allowed through;
+         * LinuxGuestCommandExecutor then restricts Ubuntu to
+         * recovery-safe commands until health is verified.
+         */
+        if (
+            !LinuxRuntimeCircuitBreaker
+                .canStartRuntime()
+        ) {
+
+            activeSession =
+                null
+
+            /*
+             * The breaker normally stops PRoot when it
+             * trips. Reconcile the repository flag here
+             * as a second layer in case the process is
+             * already gone but the transient RUNNING flag
+             * was still true.
+             */
+            if (
+                !ProotLinuxRuntimeBackend
+                    .isProcessAlive()
+            ) {
+
+                LinuxRepository
+                    .stopLinux()
+            }
+
+            return LinuxRuntimeControlResult
+                .SAFE_MODE_BLOCKED
         }
 
         /*
@@ -236,6 +315,8 @@ enum class LinuxRuntimeControlResult {
     INSTALLATION_IN_PROGRESS,
 
     FEATURE_UNAVAILABLE,
+
+    SAFE_MODE_BLOCKED,
 
     START_FAILED,
 

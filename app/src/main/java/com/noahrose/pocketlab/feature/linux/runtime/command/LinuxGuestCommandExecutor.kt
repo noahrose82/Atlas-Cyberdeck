@@ -1,6 +1,10 @@
 package com.noahrose.pocketlab.feature.linux.runtime.command
 
 import com.noahrose.pocketlab.feature.linux.runtime.ProotLinuxRuntimeBackend
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeRecoveryPolicy
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyMode
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyReason
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.atomic.AtomicLong
@@ -42,6 +46,40 @@ object LinuxGuestCommandExecutor {
                 .Failure(
                     message =
                         "Linux command cannot be empty."
+                )
+        }
+
+        val safetySnapshot =
+            LinuxRuntimeCircuitBreaker
+                .getSnapshot()
+
+        if (
+            safetySnapshot.mode ==
+            LinuxRuntimeSafetyMode.SAFE_MODE
+        ) {
+
+            return LinuxGuestCommandResult
+                .Failure(
+                    message =
+                        "Atlas Linux safe mode is active. " +
+                                "Return to the Atlas shell and run 'safety status'."
+                )
+        }
+
+        if (
+            safetySnapshot.mode ==
+            LinuxRuntimeSafetyMode.RECOVERY_ARMED &&
+            !LinuxRuntimeRecoveryPolicy
+                .isAllowedInRecovery(
+                    command
+                )
+        ) {
+
+            return LinuxGuestCommandResult
+                .Failure(
+                    message =
+                        "Atlas recovery mode blocked this command. " +
+                                "Only runtime/package recovery commands are allowed."
                 )
         }
 
@@ -317,27 +355,42 @@ object LinuxGuestCommandExecutor {
                     stderrStreamer
                         .finish()
 
+                    val capturedOutput =
+                        extractCommandOutput(
+                            rawOutput =
+                                stdoutCapture.toString(),
+
+                            beginMarker =
+                                beginMarker,
+
+                            statusMarker =
+                                statusMarker
+                        )
+
+                    val capturedError =
+                        stderrCapture
+                            .toString()
+                            .trim()
+
+                    LinuxRuntimeCircuitBreaker
+                        .trip(
+                            reason =
+                                LinuxRuntimeSafetyReason.RUNTIME_PROCESS_LOST,
+
+                            message =
+                                "Ubuntu runtime exited while Atlas was executing a guest command."
+                        )
+
                     return LinuxGuestCommandResult
                         .Failure(
                             message =
-                                "Ubuntu runtime exited while executing the command.",
+                                "Atlas circuit breaker tripped because the Ubuntu runtime exited unexpectedly.",
 
                             output =
-                                extractCommandOutput(
-                                    rawOutput =
-                                        stdoutCapture.toString(),
-
-                                    beginMarker =
-                                        beginMarker,
-
-                                    statusMarker =
-                                        statusMarker
-                                ),
+                                capturedOutput,
 
                             errorOutput =
-                                stderrCapture
-                                    .toString()
-                                    .trim()
+                                capturedError
                         )
                 }
 
@@ -461,19 +514,117 @@ object LinuxGuestCommandExecutor {
                         statusMarker
                 )
 
+            val commandOutput =
+                extractCommandOutput(
+                    rawOutput =
+                        rawOutput,
+
+                    beginMarker =
+                        beginMarker,
+
+                    statusMarker =
+                        statusMarker
+                )
+
+            val packageIntegrityFailure =
+                LinuxRuntimeRecoveryPolicy
+                    .detectPackageIntegrityFailure(
+                        rawError
+                    )
+
+            if (
+                packageIntegrityFailure != null
+            ) {
+
+                LinuxRuntimeCircuitBreaker
+                    .trip(
+                        reason =
+                            LinuxRuntimeSafetyReason.PACKAGE_STATE_FAILURE,
+
+                        message =
+                            packageIntegrityFailure
+                    )
+
+                return LinuxGuestCommandResult
+                    .Failure(
+                        message =
+                            "Atlas circuit breaker tripped because package integrity verification failed.",
+
+                        output =
+                            commandOutput,
+
+                        errorOutput =
+                            rawError
+                    )
+            }
+
+            val recoveryArmed =
+                LinuxRuntimeCircuitBreaker
+                    .isRecoveryArmed()
+
+            if (
+                recoveryArmed &&
+                LinuxRuntimeRecoveryPolicy
+                    .isRepairOperation(
+                        command
+                    ) &&
+                exitCode != 0
+            ) {
+
+                onErrorLine
+                    ?.invoke(
+                        "Atlas safety: recovery command failed " +
+                                "(exit $exitCode); recovery mode remains armed."
+                    )
+            }
+
+            if (
+                recoveryArmed &&
+                LinuxRuntimeRecoveryPolicy
+                    .isAuditOnly(
+                        command
+                    ) &&
+                exitCode == 0
+            ) {
+
+                onErrorLine
+                    ?.invoke(
+                        "Atlas safety: audit complete; recovery mode remains armed " +
+                                "until a repair command succeeds."
+                    )
+            }
+
+            if (
+                recoveryArmed &&
+                LinuxRuntimeRecoveryPolicy
+                    .recoveryVerified(
+                        command =
+                            command,
+
+                        output =
+                            commandOutput,
+
+                        errorOutput =
+                            rawError,
+
+                        exitCode =
+                            exitCode
+                    )
+            ) {
+
+                LinuxRuntimeCircuitBreaker
+                    .resetAfterVerifiedRecovery()
+
+                onErrorLine
+                    ?.invoke(
+                        "Atlas safety: recovery verified; safe mode cleared."
+                    )
+            }
+
             LinuxGuestCommandResult
                 .Success(
                     output =
-                        extractCommandOutput(
-                            rawOutput =
-                                rawOutput,
-
-                            beginMarker =
-                                beginMarker,
-
-                            statusMarker =
-                                statusMarker
-                        ),
+                        commandOutput,
 
                     errorOutput =
                         rawError,

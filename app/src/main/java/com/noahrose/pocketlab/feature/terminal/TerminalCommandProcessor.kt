@@ -19,6 +19,8 @@ import com.noahrose.pocketlab.feature.terminal.redirection.RedirectionType
 import com.noahrose.pocketlab.feature.terminal.sequential.SequentialCommandEngine
 import com.noahrose.pocketlab.feature.terminal.wildcard.WildcardExpander
 import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxInteractiveCommandGuard
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyReason
 
 object TerminalCommandProcessor {
 
@@ -243,6 +245,29 @@ object TerminalCommandProcessor {
                     )
                 }
             }
+
+            return
+        }
+
+
+        /*
+         * ------------------------------------------------
+         * ATLAS RUNTIME SAFETY COMMANDS
+         * ------------------------------------------------
+         *
+         * These commands live outside Ubuntu so they
+         * remain available even when the Linux runtime is
+         * deliberately blocked by the circuit breaker.
+         */
+        if (
+            handleSafetyCommand(
+                command =
+                    command,
+
+                output =
+                    output
+            )
+        ) {
 
             return
         }
@@ -865,4 +890,200 @@ object TerminalCommandProcessor {
             }
         }
     }
+
+
+    private fun handleSafetyCommand(
+        command: String,
+        output: MutableList<String>
+    ): Boolean {
+
+        val trimmed =
+            command.trim()
+
+        if (
+            !trimmed.equals(
+                "safety",
+                ignoreCase = true
+            ) &&
+            !trimmed.startsWith(
+                "safety ",
+                ignoreCase = true
+            )
+        ) {
+
+            return false
+        }
+
+        val parts =
+            trimmed
+                .split(
+                    Regex("\\s+")
+                )
+
+        val action =
+            parts
+                .getOrNull(
+                    1
+                )
+                ?.lowercase()
+                ?: "status"
+
+        when (
+            action
+        ) {
+
+            "status" -> {
+
+                LinuxRuntimeCircuitBreaker
+                    .statusLines()
+                    .forEach { line ->
+
+                        output.add(
+                            line
+                        )
+                    }
+
+                ExecutionStatus
+                    .set(
+                        0
+                    )
+            }
+
+            "recover" -> {
+
+                val snapshot =
+                    LinuxRuntimeCircuitBreaker
+                        .armRecovery()
+
+                if (
+                    snapshot.tripped
+                ) {
+
+                    output.add(
+                        "Atlas recovery mode armed."
+                    )
+
+                    output.add(
+                        "Start Linux, enter the Ubuntu shell, then run:"
+                    )
+
+                    output.add(
+                        "dpkg --configure -a"
+                    )
+
+                    output.add(
+                        "dpkg --audit"
+                    )
+
+                    ExecutionStatus
+                        .set(
+                            0
+                        )
+
+                } else {
+
+                    output.add(
+                        "Atlas runtime safety is already NORMAL."
+                    )
+
+                    ExecutionStatus
+                        .set(
+                            0
+                        )
+                }
+            }
+
+            "reset" -> {
+
+                val forced =
+                    parts
+                        .drop(
+                            2
+                        )
+                        .any { argument ->
+
+                            argument.equals(
+                                "--force",
+                                ignoreCase = true
+                            )
+                        }
+
+                if (
+                    !forced
+                ) {
+
+                    output.add(
+                        "safety reset requires --force."
+                    )
+
+                    output.add(
+                        "Preferred recovery: safety recover"
+                    )
+
+                    ExecutionStatus
+                        .set(
+                            1
+                        )
+
+                } else {
+
+                    LinuxRuntimeCircuitBreaker
+                        .forceReset()
+
+                    output.add(
+                        "Atlas runtime safety latch force-reset."
+                    )
+
+                    output.add(
+                        "Warning: no repair verification was performed."
+                    )
+
+                    ExecutionStatus
+                        .set(
+                            0
+                        )
+                }
+            }
+
+            "trip-test" -> {
+
+                LinuxRuntimeCircuitBreaker
+                    .trip(
+                        reason =
+                            LinuxRuntimeSafetyReason.MANUAL_TEST,
+
+                        message =
+                            "Manual circuit-breaker test requested from the Atlas shell."
+                    )
+
+                output.add(
+                    "Atlas circuit breaker TRIPPED."
+                )
+
+                output.add(
+                    "Linux runtime stopped and safe mode is active."
+                )
+
+                ExecutionStatus
+                    .set(
+                        0
+                    )
+            }
+
+            else -> {
+
+                output.add(
+                    "Usage: safety [status|recover|reset --force|trip-test]"
+                )
+
+                ExecutionStatus
+                    .set(
+                        2
+                    )
+            }
+        }
+
+        return true
+    }
+
 }

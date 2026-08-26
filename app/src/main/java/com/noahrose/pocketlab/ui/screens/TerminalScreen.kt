@@ -33,7 +33,24 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyMode
 import com.noahrose.pocketlab.feature.terminal.TerminalViewModel
+
+private val UbuntuTerminalGreen =
+    Color(
+        0xFF00FF41
+    )
+
+private val SafeModeYellow =
+    Color(
+        0xFFFFD600
+    )
+
+private val RecoveryModeAmber =
+    Color(
+        0xFFFFA000
+    )
 
 @Composable
 fun TerminalScreen(
@@ -47,34 +64,94 @@ fun TerminalScreen(
         terminalViewModel
             .linuxShellActive
 
+    /*
+     * ------------------------------------------------
+     * H4B — VISUAL SAFETY IDENTITY
+     * ------------------------------------------------
+     *
+     * Safety state has visual priority over shell state.
+     *
+     * NORMAL + Atlas shell:
+     *     existing Material theme
+     *
+     * NORMAL + Ubuntu shell:
+     *     black / Matrix green
+     *
+     * SAFE_MODE:
+     *     black / yellow
+     *
+     * RECOVERY_ARMED:
+     *     black / amber
+     *
+     * This reads the same circuit-breaker state that
+     * controls runtime access. Safety commands and guest
+     * execution already update terminal Compose state,
+     * causing this screen to recompose immediately after
+     * a mode transition.
+     */
+    val safetyMode =
+        LinuxRuntimeCircuitBreaker
+            .getSnapshot()
+            .mode
+
     val terminalBackground =
-        if (
-            linuxShellActive
+        when (
+            safetyMode
         ) {
 
-            Color.Black
+            LinuxRuntimeSafetyMode.SAFE_MODE,
+            LinuxRuntimeSafetyMode.RECOVERY_ARMED -> {
 
-        } else {
+                Color.Black
+            }
 
-            MaterialTheme
-                .colorScheme
-                .background
+            LinuxRuntimeSafetyMode.NORMAL -> {
+
+                if (
+                    linuxShellActive
+                ) {
+
+                    Color.Black
+
+                } else {
+
+                    MaterialTheme
+                        .colorScheme
+                        .background
+                }
+            }
         }
 
     val terminalTextColor =
-        if (
-            linuxShellActive
+        when (
+            safetyMode
         ) {
 
-            Color(
-                0xFF00FF41
-            )
+            LinuxRuntimeSafetyMode.SAFE_MODE -> {
 
-        } else {
+                SafeModeYellow
+            }
 
-            MaterialTheme
-                .colorScheme
-                .primary
+            LinuxRuntimeSafetyMode.RECOVERY_ARMED -> {
+
+                RecoveryModeAmber
+            }
+
+            LinuxRuntimeSafetyMode.NORMAL -> {
+
+                if (
+                    linuxShellActive
+                ) {
+
+                    UbuntuTerminalGreen
+
+                } else {
+
+                    MaterialTheme
+                        .colorScheme
+                        .primary
+                }
+            }
         }
 
     val prompt =

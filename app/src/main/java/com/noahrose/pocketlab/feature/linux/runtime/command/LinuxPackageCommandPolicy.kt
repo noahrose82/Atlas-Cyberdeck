@@ -45,6 +45,31 @@ object LinuxPackageCommandPolicy {
             "dselect-upgrade"
         )
 
+    /*
+     * dpkg operations that can change the package
+     * database or package configuration state.
+     *
+     * Read-only operations such as --audit, -l,
+     * --status, and --print-architecture do not need
+     * a post-transaction package integrity audit.
+     */
+    private val dpkgMutationActions =
+        setOf(
+            "-i",
+            "--install",
+            "--unpack",
+            "--configure",
+            "-r",
+            "--remove",
+            "-p",
+            "--purge",
+            "--triggers-only",
+            "--update-avail",
+            "--merge-avail",
+            "--clear-avail",
+            "--forget-old-unavail"
+        )
+
     fun prepare(
         command: String
     ): LinuxPackageCommandPreparation {
@@ -124,17 +149,50 @@ object LinuxPackageCommandPolicy {
          * still override the Atlas defaults for that
          * invocation.
          */
-        val hardenedCommand =
-            buildString {
+        val mutationInvocations =
+            invocations
+                .filter { invocation ->
 
-                append("( ")
-                append("export DEBIAN_FRONTEND=noninteractive; ")
-                append("export DEBCONF_NONINTERACTIVE_SEEN=true; ")
-                append("export APT_LISTCHANGES_FRONTEND=none; ")
-                append("export TZ=Etc/UTC; ")
-                append(trimmedCommand)
-                append(" )")
-            }
+                    invocation
+                        .mutatesPackageDatabase()
+                }
+
+        val auditAfterMutation =
+            mutationInvocations
+                .isNotEmpty()
+
+        /*
+         * Before a normal package mutation, verify that
+         * dpkg is already healthy.
+         *
+         * Recovery operations such as:
+         *
+         * dpkg --configure -a
+         * apt --fix-broken install -y
+         *
+         * must remain available even when the package
+         * database is degraded, otherwise Atlas could
+         * block the very commands needed to repair it.
+         */
+        val preflightBeforeMutation =
+            mutationInvocations
+                .any { invocation ->
+
+                    !invocation
+                        .isRecoveryOperation()
+                }
+
+        val hardenedCommand =
+            buildHardenedCommand(
+                command =
+                    trimmedCommand,
+
+                preflightBeforeMutation =
+                    preflightBeforeMutation,
+
+                auditAfterMutation =
+                    auditAfterMutation
+            )
 
         return LinuxPackageCommandPreparation
             .Ready(
@@ -144,6 +202,75 @@ object LinuxPackageCommandPolicy {
                 hardened =
                     true
             )
+    }
+
+    /*
+     * Build a command-scoped package environment.
+     *
+     * Normal mutation commands receive a pre-transaction
+     * dpkg audit. If Ubuntu already has an incomplete
+     * package transaction, Atlas blocks the new mutation
+     * before it can make package state harder to recover.
+     *
+     * Recovery operations bypass the preflight gate but
+     * still receive the post-transaction integrity audit.
+     *
+     * The original package command exit code is preserved
+     * after the post-transaction audit.
+     */
+    private fun buildHardenedCommand(
+        command: String,
+        preflightBeforeMutation: Boolean,
+        auditAfterMutation: Boolean
+    ): String {
+
+        return buildString {
+
+            append("( ")
+            append("export DEBIAN_FRONTEND=noninteractive; ")
+            append("export DEBCONF_NONINTERACTIVE_SEEN=true; ")
+            append("export APT_LISTCHANGES_FRONTEND=none; ")
+            append("export TZ=Etc/UTC; ")
+
+            if (preflightBeforeMutation) {
+
+                append("__atlas_pkg_pre_audit=\"${'$'}(dpkg --audit 2>&1)\"; ")
+                append("__atlas_pkg_pre_audit_exit=${'$'}?; ")
+                append("if [ ${'$'}__atlas_pkg_pre_audit_exit -ne 0 ]; then ")
+                append("printf 'Atlas package preflight: FAILED (dpkg --audit exit %s).\\n' \"${'$'}__atlas_pkg_pre_audit_exit\" >&2; ")
+                append("printf 'Repair with: dpkg --configure -a\\n' >&2; ")
+                append("exit 125; ")
+                append("fi; ")
+                append("if [ -n \"${'$'}__atlas_pkg_pre_audit\" ]; then ")
+                append("printf 'Atlas package preflight: BLOCKED\\n' >&2; ")
+                append("printf 'Existing package state is incomplete:\\n%s\\n' \"${'$'}__atlas_pkg_pre_audit\" >&2; ")
+                append("printf 'Repair with: dpkg --configure -a\\n' >&2; ")
+                append("printf 'Then retry the package command.\\n' >&2; ")
+                append("exit 126; ")
+                append("fi; ")
+                append("printf 'Atlas package preflight: CLEAN\\n' >&2; ")
+            }
+
+            append(command)
+
+            if (auditAfterMutation) {
+
+                append("; __atlas_pkg_exit=${'$'}?; ")
+                append("__atlas_pkg_audit=\"${'$'}(dpkg --audit 2>&1)\"; ")
+                append("__atlas_pkg_audit_exit=${'$'}?; ")
+                append("if [ ${'$'}__atlas_pkg_audit_exit -ne 0 ]; then ")
+                append("printf '\\nAtlas package health check failed (dpkg --audit exit %s).\\n' \"${'$'}__atlas_pkg_audit_exit\" >&2; ")
+                append("elif [ -n \"${'$'}__atlas_pkg_audit\" ]; then ")
+                append("printf '\\nAtlas package health warning:\\n%s\\n' \"${'$'}__atlas_pkg_audit\" >&2; ")
+                append("printf 'Run: DEBIAN_FRONTEND=noninteractive dpkg --configure -a\\n' >&2; ")
+                append("else ")
+                append("printf '\\nAtlas package health: CLEAN\\n' >&2; ")
+                append("fi; ")
+                append("exit ${'$'}__atlas_pkg_exit")
+            }
+
+            append(" )")
+        }
     }
 
     fun isPackageManagementCommand(
@@ -686,6 +813,119 @@ object LinuxPackageCommandPolicy {
 
                     argument in
                             aptMutationActions
+                }
+        }
+
+        fun mutatesPackageDatabase():
+                Boolean {
+
+            if (
+                executable == "apt" ||
+                executable == "apt-get"
+            ) {
+
+                return mutationAction() !=
+                        null
+            }
+
+            if (
+                executable != "dpkg"
+            ) {
+
+                return false
+            }
+
+            return arguments
+                .any { argument ->
+
+                    val normalized =
+                        argument
+                            .trim()
+                            .lowercase()
+
+                    normalized in
+                            dpkgMutationActions ||
+                            normalized.startsWith(
+                                "--install="
+                            ) ||
+                            normalized.startsWith(
+                                "--unpack="
+                            ) ||
+                            normalized.startsWith(
+                                "--configure="
+                            ) ||
+                            normalized.startsWith(
+                                "--remove="
+                            ) ||
+                            normalized.startsWith(
+                                "--purge="
+                            )
+                }
+        }
+
+        /*
+         * Package repair operations are deliberately
+         * exempt from the pre-transaction health gate.
+         * They still run in Atlas' noninteractive package
+         * environment and still receive a post-transaction
+         * dpkg audit.
+         */
+        fun isRecoveryOperation():
+                Boolean {
+
+            if (
+                executable == "dpkg"
+            ) {
+
+                return arguments
+                    .any { argument ->
+
+                        val normalized =
+                            argument
+                                .trim()
+                                .lowercase()
+
+                        normalized ==
+                                "--configure" ||
+                                normalized.startsWith(
+                                    "--configure="
+                                ) ||
+                                normalized ==
+                                "--triggers-only"
+                    }
+            }
+
+            if (
+                executable != "apt" &&
+                executable != "apt-get"
+            ) {
+
+                return false
+            }
+
+            if (
+                mutationAction() !=
+                "install"
+            ) {
+
+                return false
+            }
+
+            return arguments
+                .any { argument ->
+
+                    val normalized =
+                        argument
+                            .trim()
+                            .lowercase()
+
+                    normalized ==
+                            "-f" ||
+                            normalized ==
+                            "--fix-broken" ||
+                            normalized.startsWith(
+                                "--fix-broken="
+                            )
                 }
         }
 
