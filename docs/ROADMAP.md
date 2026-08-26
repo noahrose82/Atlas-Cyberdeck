@@ -1,685 +1,794 @@
-# Atlas Cyberdeck Roadmap
+<div align="center">
 
-> **Portable Linux-Inspired Workspace • Cybersecurity Toolkit • Android • Kotlin**
+# Atlas Cyberdeck — Development Roadmap
 
-This roadmap outlines the planned evolution of Atlas Cyberdeck from its current alpha foundation into a modular portable computing, development, and cybersecurity platform.
+### **Your Cyberdeck. Anywhere.**
 
-Atlas Cyberdeck is developed incrementally through focused engineering sprints. Features and priorities may evolve as the architecture matures.
+**Current release:** `v0.13.0-alpha`  
+**Current public phase:** Product Readiness  
+**Engineering source-of-truth endpoint:** `F3P-H5B`
 
----
-
-# Current Milestone
-
-## v0.13.0-alpha — Foundation
-
-**Sprint 050**
-
-The Foundation milestone establishes the core architecture required for future Atlas Cyberdeck development.
-
-### Core Platform
-
-- [x] Android application foundation
-- [x] Kotlin architecture
-- [x] Jetpack Compose interface
-- [x] Material 3
-- [x] Multi-screen navigation
-- [x] Boot experience
-- [x] Dashboard
-- [x] Terminal interface
-- [x] Filesystem interface
-- [x] Linux workspace foundation
+</div>
 
 ---
 
-## Terminal Foundation
+## Product North Star
 
-- [x] Linux-inspired command interface
-- [x] Command parsing
-- [x] Command history
-- [x] History recall
-- [x] Command aliases
-- [x] Environment variable expansion
-- [x] Wildcard expansion
-- [x] Hardware keyboard Tab completion
-- [x] Command pipelines
-- [x] Multi-stage pipelines
-- [x] Text-processing commands
-- [x] Filesystem commands
-- [x] Utility commands
-- [x] System commands
+> **A serious Linux workspace should be able to travel in your pocket without requiring you to surrender control of your Android device.**
+
+Atlas Cyberdeck is being built as a portable Linux workspace and extensible cyberdeck platform for Android, with an emphasis on:
+
+1. **runtime reliability**
+2. **safe failure behavior**
+3. **real Linux capability**
+4. **portable developer workflows**
+5. **extensibility**
+6. **professional product quality**
 
 ---
 
-## Command Architecture
+## How Atlas Development Works
 
-- [x] Centralized `CommandRegistry`
-- [x] Command metadata
-- [x] Command descriptions
-- [x] Command usage information
-- [x] Command categories
-- [x] Registry-driven help
-- [x] Registry-driven command completion
-- [x] `CommandHandler` interface
-- [x] `HandlerRegistry`
-- [x] Centralized `CommandDispatcher`
-- [x] Modular command handlers
-- [x] Reduced command-processor coupling
+Atlas development is organized into **engineering phases**.
 
-Current handler groups:
+A phase is not considered complete simply because code exists. Runtime-critical work must build cleanly, pass automated validation where practical, survive physical-device testing, and be explicitly locked before development continues.
+
+```mermaid
+flowchart LR
+    A["Design"] --> B["Implement"]
+    B --> C["Build"]
+    C --> D["Test"]
+    D --> E["Device Validation"]
+    E --> F["Lock"]
+    F --> G["Commit / Push"]
+```
+
+---
+
+## Status Legend
+
+| Status | Meaning |
+|---|---|
+| ✅ **LOCKED** | Implemented, validated, and accepted |
+| 🟢 **ACTIVE** | Current engineering work |
+| 🟡 **PLANNED** | Defined future work |
+| 🔵 **EXPLORATORY** | Long-term research or product direction |
+| ⏸️ **DEFERRED** | Intentionally postponed |
+
+---
+
+# Current Position
+
+| Product Area | Status |
+|---|:---:|
+| Android Application Foundation | ✅ |
+| Atlas Terminal | ✅ |
+| Persistent Virtual Filesystem | ✅ |
+| Command Architecture | ✅ |
+| Plugin Foundation | ✅ |
+| Ubuntu ARM64 Runtime | ✅ |
+| Persistent Linux Shell | ✅ |
+| Package Management | ✅ |
+| Runtime Safety | ✅ |
+| Regression Hardening | ✅ |
+| Documentation & Product Readiness | 🟢 |
+| Pre-Launch Preparation | 🟡 |
+| Atlas Cyberdeck 1.0 | 🟡 |
+
+Atlas is currently in the **v0.13.0-alpha** development line.
+
+The Linux runtime program has progressed from device capability detection to a functioning Ubuntu ARM64 environment with PRoot execution, package management, networking, persistent shell access, runtime safety, controlled recovery, and regression protection.
+
+---
+
+# Public Product Roadmap
+
+## Phase 1 — Platform Foundation
+
+**Status:** ✅ LOCKED
+
+This phase established Atlas Cyberdeck as a stable native Android application.
+
+### Delivered
+
+- Kotlin Android foundation
+- Jetpack Compose
+- Material 3
+- navigation architecture
+- boot experience
+- dashboard
+- terminal screen
+- Linux Manager
+- files screen
+- settings
+- ViewModel-driven state
+- StateFlow integration
+- cyberdeck-inspired visual identity
+- device capability awareness
+
+### Result
+
+Atlas became a functioning Android platform rather than a collection of disconnected screens.
+
+---
+
+## Phase 2 — Atlas Shell & Virtual Filesystem
+
+**Status:** ✅ LOCKED
+
+This phase established the independent Atlas shell environment and persistent virtual filesystem.
+
+### Atlas shell
+
+- command registry
+- command dispatcher
+- modular command handlers
+- command history
+- history recall
+- aliases
+- environment variables
+- wildcard expansion
+- hardware keyboard completion
+- command pipelines
+- registry-driven help
+- Atlas `.ash` scripts
+- plugin framework foundation
+- built-in diagnostics
+
+### Virtual filesystem
+
+- persistent filesystem state
+- working-directory tracking
+- relative paths
+- file creation
+- file reading and writing
+- copying
+- moving and renaming
+- deletion
+- directory creation and removal
+- filesystem search
+- tree visualization
+
+### Architectural rule
+
+> **The Atlas shell is not Ubuntu.**
+
+Atlas maintains its own command environment, filesystem, state, scripting model, diagnostics, and application-level controls independently of the Linux guest.
+
+---
+
+## Phase 3 — Ubuntu Linux Runtime
+
+**Status:** ✅ LOCKED
+
+This phase moved Atlas from a Linux-manager concept to a functioning rootless Ubuntu environment on Android.
+
+### Delivered
+
+- Linux feature gating
+- device capability detection
+- persistent Linux installation state
+- runtime controller
+- runtime backend abstraction
+- native PRoot launcher
+- ARM64 ABI detection
+- native runtime packaging
+- runtime path management
+- runtime storage preparation
+- Ubuntu ARM64 root filesystem
+- RootFS staging and provisioning
+- guest handshake
+- real command execution bridge
+- persistent Ubuntu shell
+- runtime diagnostics
+- runtime provenance checks
+- rootless Android execution
+
+### Current guest
 
 ```text
-Utility
-File
-Directory
-Text
+Distribution : Ubuntu 24.04.4 LTS
+Architecture : ARM64 / AArch64
+Runtime      : PRoot
+Guest UID    : 0
+Home         : /root
+Android Root : Not required
 ```
 
-Current command-processing architecture:
+### Example
+
+```console
+atlas@cyberdeck:~$ linux start
+Linux runtime started.
+
+atlas@cyberdeck:~$ linux shell
+Ubuntu shell mode enabled.
+Type 'exit' to return to Atlas.
+
+root@atlas:~#
+```
+
+---
+
+## Phase 4 — Linux Networking, Filesystem Compatibility & Package Management
+
+**Status:** ✅ LOCKED
+
+This phase made the Ubuntu guest useful for real development workflows.
+
+### Delivered
+
+- Android DNS discovery
+- guest `/etc/resolv.conf` synchronization
+- functional Linux network resolution
+- functional `apt update`
+- PRoot link-to-symlink compatibility
+- dedicated `.l2s` state
+- corrected guest `/tmp`
+- dedicated host-side PRoot temporary storage
+- `/dev`, `/proc`, and `/sys` bindings
+- streaming guest command output
+- `apt`
+- `apt-get`
+- `dpkg`
+- package preflight health checks
+- post-transaction package audits
+- explicit noninteractive package policy
+- preservation of original command exit status
+- package-integrity failure detection
+
+### Example
+
+```console
+root@atlas:~# apt install -y python3
+...
+Atlas package health: CLEAN
+
+root@atlas:~# python3 --version
+Python 3.12.3
+```
+
+---
+
+## Phase 5 — Runtime Safety & Recovery
+
+**Status:** ✅ LOCKED
+
+Atlas treats Linux runtime integrity as a first-class system concern.
+
+### Safety states
+
+| State | Runtime Access | Purpose |
+|---|---|---|
+| 🟢 **NORMAL** | Enabled | Standard Linux operation |
+| 🟡 **SAFE_MODE** | Blocked | Fail closed after a serious runtime, filesystem, package, or integrity failure |
+| 🟠 **RECOVERY_ARMED** | Recovery only | Permit controlled repair while restricting guest commands |
+
+### Delivered
+
+- fail-closed runtime circuit breaker
+- persistent safety state
+- runtime shutdown after critical failure
+- transient-state cleanup
+- preservation of RootFS and user data
+- controlled recovery arming
+- verified repair requirement
+- reactive safety state
+- terminal safety identity
+- app-wide safety banner
+- safety-aware Linux controls
+- runtime access reporting
+- safety reason reporting
+- safety cleanup reporting
+- `diagnostics` safety integration
+- `status` safety integration
+- `neofetch` safety integration
+- developer force-reset escape hatch
+
+### Safety commands
 
 ```text
-User Input
-    │
-    ▼
-Alias Resolution
-    │
-    ▼
-Variable Expansion
-    │
-    ▼
-Wildcard Expansion
-    │
-    ▼
-Pipe Engine
-    │
-    ▼
-Command Dispatcher
-    │
-    ▼
-Handler Registry
-    │
-    ▼
-Command Handlers
+safety status
+safety recover
+safety trip-test
+safety reset --force
 ```
 
 ---
 
-## Virtual File System
+## Phase 6 — Regression Hardening
 
-- [x] Virtual filesystem foundation
-- [x] Persistent filesystem state
-- [x] Working-directory tracking
-- [x] Directory navigation
-- [x] Directory creation
-- [x] Directory deletion
-- [x] File creation
-- [x] File deletion
-- [x] File reading
-- [x] File writing
-- [x] File copying
-- [x] File moving
-- [x] File renaming
-- [x] Filesystem searching
-- [x] Directory tree visualization
-- [x] Relative path operations
-- [x] Filesystem unit tests
+**Status:** ✅ LOCKED THROUGH `H5B`
 
----
+This phase protects critical runtime behavior from accidental regression.
 
-## Shell Scripting
+### Delivered
 
-- [x] `ScriptEngine`
-- [x] Multi-command execution
-- [x] Virtual filesystem script loading
-- [x] `.ash` script format
-- [x] `runscript` command
-- [x] Blank-line handling
-- [x] Script comments
-- [x] Sequential command execution
-- [x] Filesystem state preservation during script execution
+- Linux command contract tests
+- protection for `linux shell`
+- Safe Mode command-contract coverage
+- Recovery Mode command-contract coverage
+- package policy validation
+- recovery behavior validation
+- runtime access validation
+- pure safety state-machine tests
 
-Example:
+### Direct JVM safety coverage
 
 ```text
-runscript example.ash
+NORMAL         → runtime allowed
+SAFE_MODE      → runtime blocked
+RECOVERY_ARMED → runtime allowed for recovery
+
+trip           → SAFE_MODE
+armRecovery    → RECOVERY_ARMED
+reset          → NORMAL
+corrupt state  → fail closed
 ```
 
-Future scripting work will expand this foundation with additional shell-language capabilities.
+### Result
+
+Critical safety policy can be tested independently of Android, PRoot, persistence, and filesystem side effects.
 
 ---
 
-## Plugin Architecture
+## Phase 7 — Documentation & Product Readiness
 
-- [x] `TerminalPlugin` contract
-- [x] `PluginInfo`
-- [x] `PluginRegistry`
-- [x] Plugin registration
-- [x] Plugin initialization
-- [x] Core plugin
-- [x] `plugins` command
-- [x] Installed-plugin discovery
+**Status:** 🟢 ACTIVE
 
-Current built-in plugin:
+The codebase advanced faster than the public-facing documentation during the Linux runtime program.
 
-```text
-Core
+This phase brings the repository, engineering documentation, visual identity, and product story back into alignment.
+
+### In progress
+
+- README redesign
+- roadmap synchronization
+- architecture synchronization
+- changelog reconstruction
+- command reference updates
+- Linux runtime documentation
+- runtime-safety documentation
+- recovery documentation
+- testing documentation
+- updated screenshots
+- professional architecture diagrams
+- consistent Atlas Labs visual identity
+- repository presentation cleanup
+- release-readiness documentation
+
+### Product-readiness goal
+
+A visitor should be able to understand within seconds that Atlas is:
+
+> **A rootless Ubuntu Linux workspace and extensible cyberdeck platform for Android.**
+
+---
+
+## Phase 8 — Pre-Launch & Kickstarter Preparation
+
+**Status:** 🟡 PLANNED
+
+Pre-launch preparation begins before Atlas 1.0 and remains separate from the actual commercial launch.
+
+### Planned work
+
+- Atlas Labs landing page
+- product positioning
+- mailing-list capture
+- launch screenshots
+- professional terminal demos
+- 30–60 second real-device demo video
+- campaign story
+- campaign budget
+- reward structure
+- founder story
+- FAQ
+- risks and challenges section
+- campaign visual assets
+- pre-launch audience building
+- launch-day communications
+- Kickstarter feasibility validation
+
+### Campaign principle
+
+A crowdfunding campaign should promise only clearly defined Atlas 1.0 deliverables that can be realistically completed and supported.
+
+---
+
+## Phase 9 — Remote Development & Administration
+
+**Status:** 🟡 PLANNED
+
+This phase expands Atlas from a local Linux environment into a portable remote-development and administration workstation.
+
+### Planned areas
+
+- SSH client
+- saved SSH profiles
+- secure key handling
+- known-host verification
+- session management
+- connection diagnostics
+- remote command workflows
+- remote file transfer
+
+Security-sensitive functionality will be designed around explicit user control and safe defaults.
+
+---
+
+## Phase 10 — Git & Developer Workflows
+
+**Status:** 🟡 PLANNED
+
+### Planned areas
+
+- Git repository operations
+- clone
+- status
+- branch workflows
+- commit workflows
+- pull / push workflows
+- repository browser
+- developer project workspaces
+- Linux guest integration where appropriate
+
+---
+
+## Phase 11 — Workspace Resilience
+
+**Status:** 🟡 PLANNED
+
+Atlas already protects Linux runtime integrity. This phase expands resilience into user-controlled workspace protection.
+
+### Planned areas
+
+- Linux workspace snapshots
+- restore points
+- export / import workflows
+- backup validation
+- storage-health reporting
+- controlled workspace recovery
+
+### Design rule
+
+No destructive feature should silently erase the user's primary Atlas or Ubuntu environment.
+
+---
+
+## Phase 12 — Platform Extensibility
+
+**Status:** 🟡 PLANNED
+
+### Planned areas
+
+- expanded plugin architecture
+- additional Atlas scripting capabilities
+- extension APIs
+- modular tools
+- expanded networking utilities
+- configurable cyberdeck modules
+
+The long-term goal is for Atlas to become a platform rather than a fixed collection of screens and commands.
+
+---
+
+## Phase 13 — Atlas Cyberdeck 1.0
+
+**Status:** 🟡 PLANNED
+
+Version 1.0 represents a **product-quality threshold**, not simply a version-number change.
+
+### 1.0 focus
+
+- stable Linux runtime
+- stable install / remove lifecycle
+- runtime failure recovery
+- polished terminal experience
+- reliable networking
+- verified package workflows
+- broad regression coverage
+- accessibility review
+- device compatibility matrix
+- onboarding
+- user documentation
+- privacy review
+- security review
+- release signing
+- distribution readiness
+- performance profiling
+- battery and storage behavior
+- support and issue workflow
+
+### Release principle
+
+> **Atlas 1.0 should be something we are comfortable asking real users to trust with their mobile Linux workspace.**
+
+---
+
+## Phase 14 — Commercial & Community Launch
+
+**Status:** 🟡 PLANNED
+
+Atlas Cyberdeck is intended to remain technically credible first and commercially viable second.
+
+### Planned launch work
+
+- public Atlas Labs website
+- product landing page
+- public documentation portal
+- professional demo video
+- real-device demonstrations
+- launch screenshots
+- early-access community
+- pricing validation
+- Free / Pro feature boundaries
+- education opportunities
+- team-use research
+- public distribution
+- launch communications
+- post-launch feedback loop
+
+### Product principle
+
+Core runtime safety should remain part of the platform foundation rather than becoming a paywalled protection feature.
+
+---
+
+## Phase 15 — Multi-Device Expansion
+
+**Status:** 🔵 EXPLORATORY
+
+### Future targets
+
+- Android tablets
+- Chromebooks
+- desktop edition
+- desktop/mobile workflow continuity
+- larger-screen terminal layouts
+- keyboard-first workflows
+
+---
+
+## Phase 16 — Dedicated Cyberdeck Hardware
+
+**Status:** 🔵 EXPLORATORY
+
+A long-term direction for Atlas Labs is dedicated cyberdeck hardware.
+
+### Research areas
+
+- compact ARM compute platforms
+- integrated keyboard
+- portable display
+- modular connectivity
+- field-service workflows
+- hardware-backed security
+- Atlas-first operating experience
+
+This phase remains intentionally exploratory until the Android software platform reaches sufficient maturity.
+
+---
+
+# Engineering Completion Record
+
+The public phases above are intentionally easy to read.
+
+The detailed internal engineering track remains preserved below for developers, contributors, future maintainers, and historical traceability.
+
+<details>
+<summary><strong>Expand complete Linux runtime engineering track</strong></summary>
+
+<br>
+
+## F3A–F3M — Runtime Architecture
+
+**Status:** ✅ LOCKED
+
+- F3A — Linux feature gate enforcement
+- F3B — capability UI
+- F3C — capability synchronization
+- F3D — persistent installation
+- F3E — runtime session state
+- F3F — status integration
+- F3G — runtime controls
+- F3H — terminal Linux controls
+- F3I — diagnostics / neofetch
+- F3J — status-model consolidation
+- F3K — controller consolidation
+- F3L — backend abstraction
+- F3M-A — result model
+- F3M-B — session model
+- F3M-C — backend-owned session
+
+## F3N — Native Runtime
+
+**Status:** ✅ LOCKED
+
+- F3N-A — process launcher
+- F3N-B — runtime paths
+- F3N-C — storage preparation
+- F3N-D — filesystem diagnostics
+- F3N-E — asset readiness
+- F3N-F — binary provisioning
+- F3N-G — ABI detection
+- F3N-H — architecture descriptor
+- F3N-I — native diagnostics
+- F3N-J — provenance
+- F3N-L — native runtime packaged in APK
+- F3N-M — native resolver
+- F3N-N — runtime integrity
+
+## F3O — Ubuntu RootFS
+
+**Status:** ✅ LOCKED
+
+- F3O-A — Ubuntu ARM64 source
+- F3O-B — provenance diagnostics
+- F3O-C — archive staging
+- F3O-D — staging diagnostics
+- RootFS provisioning
+
+## F3P — Real Linux Execution
+
+**Status:** ✅ LOCKED THROUGH H5B
+
+- F3P-A — launch specification
+- F3P-B — real PRoot backend
+- F3P-C — launch diagnostics
+- F3P-D — guest handshake
+- F3P-E — real command bridge
+- F3P-F — persistent shell mode
+- F3P-G1 — Linux prompt
+- G2 — visual shell identity
+- G3 — shell polish
+- G4 — PTY guard
+
+## H1 — Networking
+
+**Status:** ✅ LOCKED
+
+- H1A — DNS / apt
+- H1B — nonblocking execution / ANR protection
+- H1C — Android DNS synchronization
+
+## H2 — Package Filesystem Compatibility
+
+**Status:** ✅ LOCKED
+
+- H2A — link-to-symlink flags
+- H2B — `PROOT_L2S_DIR`
+- H2C — streaming
+- H2 — package installation
+
+## H3 — Package Hardening
+
+**Status:** ✅ LOCKED
+
+- H3A — package command hardening
+- H3B — transaction post-audit
+- H3C — pre-transaction health gate
+
+## H4 — Runtime Safety
+
+**Status:** ✅ LOCKED
+
+- H4A — runtime circuit breaker & recovery
+- H4B — visual safety identity
+- H4C — reactive safety state
+- H4D — app-wide safety identity
+- H4E — safety-aware Linux controls
+- H4F — safety diagnostics
+- H4G — safety state in status / neofetch
+- H4G hotfix — persistent `linux shell` restoration
+
+## H5 — Regression Hardening
+
+**Status:** ✅ LOCKED THROUGH H5B
+
+- H5A — Linux command contract tests
+- H5B — safety state unit-testability
+
+**Current engineering endpoint:** `F3P-H5B`
+
+</details>
+
+---
+
+# Runtime Architecture Snapshot
+
+```mermaid
+flowchart TD
+    A["Android Device"] --> B["Atlas Cyberdeck"]
+
+    B --> C["Atlas UI"]
+    B --> D["Atlas Terminal"]
+    B --> E["Linux Runtime Controller"]
+    B --> F["Runtime Safety"]
+
+    D --> G["Atlas Shell"]
+    D --> H["Virtual Filesystem"]
+    D --> I["Linux Shell Mode"]
+
+    E --> J["PRoot Backend"]
+    I --> K["Guest Command Executor"]
+    K --> J
+
+    J --> L["Ubuntu 24.04.4 ARM64 RootFS"]
+
+    F --> E
+    F --> K
+    F --> C
+
+    L --> M["apt / dpkg / Python / Linux Tools"]
 ```
 
-Dynamic external plugin loading is planned for a future milestone.
+---
+
+# Deferred Concepts
+
+## Burner Mode
+
+**Status:** ⏸️ DEFERRED
+
+Burner Mode is a future disposable-workspace concept.
+
+The current design direction preserves:
+
+- the Atlas application;
+- the primary Atlas workspace;
+- the primary Ubuntu installation.
+
+Any future Burner implementation should operate only on explicitly disposable Burner-owned data.
+
+It should not claim to erase Android, network-provider, cloud-provider, or external-system records.
 
 ---
 
-## System Services
+# Roadmap Principles
 
-- [x] Centralized `VersionInfo`
-- [x] Version command
-- [x] Build information
-- [x] Release codename
-- [x] System information reporting
-- [x] `neofetch`
-- [x] `status`
-- [x] Built-in diagnostics
-- [x] Registry diagnostics
-- [x] Plugin diagnostics
-- [x] Handler diagnostics
-- [x] Overall system health reporting
+Atlas Cyberdeck development follows several non-negotiable principles:
 
----
+### 1. Build real capability
 
-## Testing and Quality
+Features should solve real technical problems rather than exist only for presentation.
 
-- [x] Unit-test infrastructure
-- [x] Filesystem tests
-- [x] Terminal component testing
-- [x] Script execution validation
-- [x] Dispatcher validation
-- [x] Registry validation
-- [x] Debug build validation
-- [x] Terminal smoke testing
+### 2. Preserve user trust
 
-Release validation commands:
+Runtime failures must not silently destroy user data or bypass safety controls.
 
-```bash
-./gradlew testDebugUnitTest
-./gradlew assembleDebug
-```
+### 3. Fail closed when integrity is uncertain
+
+Unknown or corrupted safety state should not be treated as safe by default.
+
+### 4. Keep Atlas and Ubuntu architecturally distinct
+
+The Atlas shell remains an application platform. Ubuntu remains the Linux guest.
+
+### 5. Test critical policy independently
+
+Safety and command contracts should be unit-testable wherever practical.
+
+### 6. Treat documentation as part of the product
+
+Architecture, roadmap, security behavior, recovery behavior, and user-facing capability should stay synchronized with the codebase.
 
 ---
 
-## Continuous Integration
-
-- [x] GitHub Actions workflow
-- [x] Automated unit-test execution
-- [x] Automated build validation
-- [x] CI validation on repository changes
-- [x] Incremental commit workflow
-
-Development workflow:
-
-```text
-Design
-  ↓
-Implement
-  ↓
-Build
-  ↓
-Test
-  ↓
-Commit
-  ↓
-Continuous Integration
-```
-
----
-
-# Next Milestone
-
-## Terminal and Scripting Expansion
-
-The next stage will build on the Sprint 050 architecture instead of expanding `TerminalCommandProcessor` directly.
-
-### Shell Improvements
-
-- [ ] Command chaining
-- [ ] Conditional execution
-- [ ] Improved redirection
-- [ ] Append redirection
-- [ ] Additional environment variables
-- [ ] Improved path expansion
-- [ ] Improved quoting
-- [ ] Escaped characters
-- [ ] Command arguments and option parsing
-- [ ] Improved shell error reporting
-
-### Atlas Shell
-
-Expand `.ash` scripting with:
-
-- [ ] Script arguments
-- [ ] Script variables
-- [ ] Conditional statements
-- [ ] Basic loops
-- [ ] Exit codes
-- [ ] Script error handling
-- [ ] Nested script execution
-- [ ] Script permissions
-- [ ] Additional comments/documentation support
-
-The long-term goal is for Atlas shell scripts to provide lightweight automation inside the Atlas Cyberdeck environment.
-
----
-
-# Plugin Expansion
-
-The current plugin framework establishes the contract and registry foundation.
-
-Future work includes:
-
-- [ ] Plugin lifecycle management
-- [ ] Plugin enable/disable state
-- [ ] Plugin command registration
-- [ ] Plugin-provided handlers
-- [ ] Plugin-provided services
-- [ ] Plugin dependency metadata
-- [ ] Plugin compatibility checks
-- [ ] Plugin version validation
-- [ ] Plugin error isolation
-- [ ] Dynamic plugin discovery
-- [ ] External plugin loading
-
-Potential future modules include:
-
-```text
-Core
-Scripting
-Networking
-SSH
-Git
-Package Manager
-Development Tools
-Cybersecurity Tools
-```
-
----
-
-# Linux Runtime
-
-Atlas Cyberdeck is intended to evolve beyond a simulated Linux-inspired workspace.
-
-Planned Linux capabilities include:
-
-- [ ] Rootless Linux runtime research
-- [ ] Linux distribution management
-- [ ] Distribution installation
-- [ ] Distribution lifecycle management
-- [ ] Linux process execution
-- [ ] Linux command integration
-- [ ] Linux filesystem integration
-- [ ] Terminal/runtime bridging
-- [ ] Package installation
-- [ ] Multiple Linux distributions
-
-Potential distributions may include:
-
-- Debian
-- Ubuntu
-- Kali Linux
-
-The final implementation will depend on Android platform limitations, security requirements, and runtime architecture.
-
----
-
-# SSH and Remote Administration
-
-Planned remote-management capabilities include:
-
-- [ ] SSH client foundation
-- [ ] SSH connection profiles
-- [ ] Password authentication
-- [ ] SSH key authentication
-- [ ] Known-host management
-- [ ] Remote shell sessions
-- [ ] Session persistence
-- [ ] Secure credential storage
-- [ ] SFTP integration
-- [ ] Remote file management
-
-SSH functionality will be implemented with security and credential isolation as primary design requirements.
-
----
-
-# Git Integration
-
-Planned Git functionality includes:
-
-- [ ] Repository initialization
-- [ ] Repository cloning
-- [ ] Repository status
-- [ ] Staging
-- [ ] Commits
-- [ ] Branch management
-- [ ] Remote repositories
-- [ ] Pull
-- [ ] Push
-- [ ] Repository history
-- [ ] Authentication management
-- [ ] Git terminal commands
-- [ ] Git user interface
-
----
-
-# Networking Tools
-
-Future networking capabilities may include:
-
-- [ ] Network interface information
-- [ ] IP configuration
-- [ ] DNS tools
-- [ ] Ping
-- [ ] Traceroute
-- [ ] Connection testing
-- [ ] Port information
-- [ ] Network diagnostics
-- [ ] HTTP utilities
-- [ ] Secure network tooling
-
-Cybersecurity-related functionality will be designed for legitimate administration, education, testing, and authorized security work.
-
----
-
-# Package Management
-
-A future Atlas package-management layer may provide:
-
-- [ ] Package metadata
-- [ ] Package registry
-- [ ] Package search
-- [ ] Package installation
-- [ ] Package removal
-- [ ] Package updates
-- [ ] Dependency resolution
-- [ ] Version management
-- [ ] Plugin/package integration
-
----
-
-# Filesystem Expansion
-
-Future virtual filesystem work includes:
-
-- [ ] File metadata
-- [ ] Permissions model
-- [ ] Ownership model
-- [ ] Hidden files
-- [ ] Symbolic-link research
-- [ ] Improved path normalization
-- [ ] Import from Android storage
-- [ ] Export to Android storage
-- [ ] Archive support
-- [ ] Filesystem backup
-- [ ] Filesystem restore
-- [ ] Storage quotas
-- [ ] Filesystem integrity checks
-
----
-
-# User Interface Expansion
-
-Future interface development includes:
-
-- [ ] Improved terminal customization
-- [ ] Terminal themes
-- [ ] Configurable fonts
-- [ ] Command palette
-- [ ] Improved file manager
-- [ ] File editor
-- [ ] Script editor
-- [ ] Plugin manager
-- [ ] SSH connection manager
-- [ ] Git interface
-- [ ] Linux distribution manager
-- [ ] System diagnostics dashboard
-- [ ] Settings expansion
-- [ ] Tablet optimization
-- [ ] Chromebook optimization
-- [ ] Landscape workspace improvements
-- [ ] Keyboard-first workflows
-
----
-
-# Security
-
-Security will remain a core architectural requirement.
-
-Planned work includes:
-
-- [ ] Secure credential storage
-- [ ] Secrets management
-- [ ] SSH key protection
-- [ ] Plugin isolation
-- [ ] Script execution controls
-- [ ] Input validation improvements
-- [ ] Filesystem permission model
-- [ ] Security-focused testing
-- [ ] Dependency scanning
-- [ ] Static analysis
-- [ ] Security review process
-- [ ] Threat modeling
-- [ ] Release security checks
-
----
-
-# Testing Expansion
-
-Planned quality improvements include:
-
-- [ ] Increased unit-test coverage
-- [ ] Command-handler tests
-- [ ] Command registry tests
-- [ ] Handler registry tests
-- [ ] Plugin registry tests
-- [ ] Script-engine tests
-- [ ] Pipeline tests
-- [ ] Alias tests
-- [ ] Variable-expansion tests
-- [ ] Wildcard-expansion tests
-- [ ] Integration tests
-- [ ] UI tests
-- [ ] Regression tests
-
----
-
-# Continuous Integration and Delivery
-
-Future automation includes:
-
-- [ ] Static-analysis checks
-- [ ] Code-style validation
-- [ ] Dependency checks
-- [ ] Automated release builds
-- [ ] Release artifact generation
-- [ ] Version consistency checks
-- [ ] Automated changelog validation
-- [ ] Release signing research
-
----
-
-# Desktop Edition
-
-Long-term plans include exploring an Atlas Cyberdeck desktop application.
-
-Potential targets include:
-
-- [ ] Windows
-- [ ] Linux
-- [ ] macOS
-
-The desktop edition should share architecture and concepts with the Android application where practical.
-
-Potential capabilities include:
-
-- Terminal
-- Filesystem
-- Scripting
-- Plugins
-- SSH
-- Git
-- Development tools
-- Cybersecurity tools
-- Remote administration
-
----
-
-# Dedicated Cyberdeck Hardware
-
-A long-term objective is to explore dedicated hardware designed specifically for Atlas Cyberdeck.
-
-Potential hardware concepts include:
-
-- Compact cyberdeck form factor
-- Integrated keyboard
-- Touch display
-- Portable battery
-- USB expansion
-- External storage
-- Ethernet
-- Wi-Fi
-- Bluetooth
-- Hardware status indicators
-- Modular peripherals
-
-This remains a long-term research and development objective.
-
----
-
-# Path to v1.0.0
-
-Atlas Cyberdeck will not reach `v1.0.0` simply because a predetermined number of sprints has been completed.
-
-The stable release should represent a platform that is:
-
-- Reliable
-- Tested
-- Documented
-- Maintainable
-- Secure
-- Extensible
-- Useful for real workflows
-
-Major objectives before `v1.0.0` include:
-
-- [ ] Stable terminal architecture
-- [ ] Stable virtual filesystem
-- [ ] Mature shell scripting
-- [ ] Mature plugin architecture
-- [ ] SSH support
-- [ ] Git integration
-- [ ] Linux runtime integration
-- [ ] Expanded automated testing
-- [ ] Security hardening
-- [ ] Performance testing
-- [ ] User documentation
-- [ ] Developer documentation
-- [ ] Release process
-- [ ] Stable application upgrade path
-
----
-
-# Long-Term Vision
-
-Atlas Cyberdeck is intended to evolve into more than a terminal emulator.
-
-The long-term vision is a portable computing platform that combines:
-
-```text
-Android
-   │
-   ├── Atlas Interface
-   │
-   ├── Terminal
-   │
-   ├── Virtual File System
-   │
-   ├── Atlas Shell
-   │
-   ├── Plugin Platform
-   │
-   ├── Linux Runtime
-   │
-   ├── SSH
-   │
-   ├── Git
-   │
-   ├── Networking
-   │
-   └── Cybersecurity Tools
-   │
-   ▼
-Portable Cyberdeck Platform
-```
-
-Atlas Cyberdeck should remain modular enough that individual capabilities can evolve without requiring the entire application to be redesigned.
-
----
-
-# Development Principles
-
-Atlas Cyberdeck development follows several core principles:
-
-1. Build foundations before features.
-2. Prefer modular components to monolithic classes.
-3. Keep responsibilities clearly separated.
-4. Test important behavior.
-5. Refactor when architecture begins creating unnecessary coupling.
-6. Keep documentation synchronized with implementation.
-7. Validate changes before release.
-8. Design new functionality with long-term extensibility in mind.
-9. Avoid claiming functionality that has not actually been implemented.
-10. Treat security as an architectural requirement rather than an afterthought.
-
----
-
-# Current Status
-
-```text
-Atlas Cyberdeck
-Version  : v0.13.0-alpha
-Sprint   : 050
-Codename : Foundation
-Status   : ACTIVE DEVELOPMENT
-```
-
-### Foundation Milestone
-
-- [x] Terminal
-- [x] Virtual File System
-- [x] Command Registry
-- [x] Command Dispatcher
-- [x] Handler Registry
-- [x] Command History
-- [x] Alias Resolution
-- [x] Variable Expansion
-- [x] Wildcard Expansion
-- [x] Command Completion
-- [x] Pipe Engine
-- [x] Script Engine
-- [x] `.ash` Scripts
-- [x] Plugin Framework Foundation
-- [x] Version Service
-- [x] Diagnostics
-- [x] Unit Testing
-- [x] Continuous Integration
-- [x] Architecture Documentation
-
----
+<div align="center">
 
 ## Atlas Labs
 
-Atlas Cyberdeck is developed by **Atlas Labs** with a focus on clean architecture, maintainable software, continuous improvement, security, and long-term extensibility.
+### **Build the platform. Prove the runtime. Earn the trust.**
+
+<br>
 
 > *"Maybe not breaking free from the Matrix—but we are writing our own code instead of living inside someone else's. That is a pretty good way to spend our time."*
 
----
+<br>
 
 **Atlas Cyberdeck — v0.13.0-alpha**
 
-**Sprint 050 — Foundation Milestone**
+### **Your Cyberdeck. Anywhere.**
+
+</div>

@@ -1,260 +1,735 @@
-# Changelog
+<div align="center">
 
-All notable changes to Atlas Cyberdeck are documented in this file.
+# Atlas Cyberdeck — Changelog
 
-Atlas Cyberdeck is currently in alpha development. Features, architecture,
-APIs, and internal package organization may change as the project evolves.
+### **Your Cyberdeck. Anywhere.**
+
+All notable changes to Atlas Cyberdeck are documented here.
+
+</div>
 
 ---
 
-## v0.13.0-alpha — Foundation Milestone
+## About This Changelog
 
-Sprint 050 establishes the current Atlas Cyberdeck foundation milestone,
-bringing together the terminal, virtual filesystem, command architecture,
-scripting framework, plugin foundation, testing, diagnostics, and continuous
-integration infrastructure.
+Atlas Cyberdeck is currently in **alpha development**.
 
-### Added
+Features, internal APIs, package organization, runtime behavior, and implementation details may continue to evolve before version 1.0.
 
-#### Virtual File System
+This changelog records user-visible changes, major architectural work, runtime milestones, safety improvements, testing improvements, and release-level engineering changes.
 
-- Persistent virtual filesystem
-- Directory navigation
-- File creation
-- File deletion
-- File reading
-- File writing
-- Directory creation
-- Directory deletion
-- File copying
-- File moving and renaming
-- Filesystem searching
-- Directory tree visualization
-- Working-directory tracking
+The project roadmap contains the detailed phase history:
 
-#### Terminal
+[`docs/ROADMAP.md`](ROADMAP.md)
 
-- Linux-inspired terminal environment
-- Command history
-- Command history recall
-- Command aliases
-- Environment variable expansion
-- Wildcard expansion
-- Hardware keyboard Tab completion
-- Multi-stage command pipelines
-- Text-processing commands
-- Filesystem commands
-- Utility commands
-- System commands
+---
 
-#### Command Architecture
+# v0.13.0-alpha — Linux Runtime & Safety Foundation
 
-- Centralized `CommandRegistry`
-- Command metadata
-- Command descriptions
-- Command usage information
-- Command categories
-- Registry-driven help system
-- Registry-driven command completion
-- Centralized `CommandDispatcher`
-- Common `CommandHandler` interface
-- `HandlerRegistry`
-- Modular command-handler architecture
+`v0.13.0-alpha` represents the largest technical expansion of Atlas Cyberdeck so far.
 
-Current command-handler groups include:
+This release line moves Atlas beyond a Linux-inspired terminal foundation and establishes a **real rootless Ubuntu ARM64 environment on Android**, together with persistent shell access, package management, Android network integration, runtime diagnostics, fail-closed safety controls, controlled recovery, and regression protection.
 
-- Utility
-- File
-- Directory
-- Text
+### Release Highlights
 
-#### Shell Scripting
+| Area | Status |
+|---|:---:|
+| Atlas shell platform | ✅ |
+| Persistent virtual filesystem | ✅ |
+| Ubuntu 24.04.4 ARM64 RootFS | ✅ |
+| Native PRoot runtime | ✅ |
+| Persistent Ubuntu shell | ✅ |
+| Android DNS synchronization | ✅ |
+| `apt` / `apt-get` / `dpkg` | ✅ |
+| Streaming Linux command execution | ✅ |
+| Package transaction hardening | ✅ |
+| Runtime circuit breaker | ✅ |
+| Safe Mode | ✅ |
+| Controlled Recovery | ✅ |
+| Safety-aware UI | ✅ |
+| Linux command regression tests | ✅ |
+| Safety state-machine tests | ✅ |
 
-- Atlas shell `ScriptEngine`
-- Multi-command script execution
-- Virtual filesystem script loading
-- `.ash` script support
-- `runscript` command
-- Blank-line handling
-- Script comment handling
-- Sequential command execution through the existing terminal architecture
-- Filesystem state maintained between script commands
+---
+
+## Added
+
+### Rootless Ubuntu Linux Runtime
+
+Added a real Ubuntu Linux userspace for supported ARM64 Android devices.
+
+Current guest environment:
+
+```text
+Distribution : Ubuntu 24.04.4 LTS
+Architecture : ARM64 / AArch64
+Runtime      : PRoot
+Guest UID    : 0
+Home         : /root
+Android Root : Not required
+```
+
+The Linux environment is persistent and remains separate from the Atlas shell environment.
+
+---
+
+### Native PRoot Runtime
+
+Added the native runtime layer required to launch Ubuntu inside the Android application.
+
+Major additions include:
+
+- native ARM64 PRoot runtime
+- native runtime loader support
+- ABI detection
+- runtime architecture descriptors
+- native asset provisioning
+- runtime path management
+- runtime storage preparation
+- runtime asset validation
+- runtime integrity validation
+- runtime provenance diagnostics
+- native runtime packaging inside the APK
+
+---
+
+### Ubuntu RootFS Provisioning
+
+Added the Ubuntu ARM64 RootFS provisioning pipeline.
+
+The RootFS workflow now includes:
+
+- Ubuntu source definition
+- archive staging
+- staging diagnostics
+- RootFS extraction
+- RootFS preparation
+- persistent installation state
+- RootFS provenance reporting
+- installation readiness validation
+
+---
+
+### Linux Runtime Controller
+
+Added a consolidated runtime-control layer.
+
+The runtime controller coordinates:
+
+- installation state
+- device capability
+- runtime safety
+- backend startup
+- backend shutdown
+- runtime session state
+- process-state reconciliation
+
+The controller is now the primary application-side authority for Linux startup and shutdown.
+
+---
+
+### Runtime Backend Abstraction
+
+Added an explicit backend boundary between application runtime control and PRoot-specific implementation details.
+
+Current runtime flow:
+
+```text
+LinuxRuntimeController
+        │
+        ▼
+LinuxRuntimeBackend
+        │
+        ▼
+ProotLinuxRuntimeBackend
+```
+
+This reduces direct coupling between the Android UI and native process management.
+
+---
+
+### Persistent Ubuntu Shell
+
+Added persistent Ubuntu shell mode.
+
+Users can now start Linux:
+
+```console
+atlas@cyberdeck:~$ linux start
+Linux runtime started.
+```
+
+Enter Ubuntu:
+
+```console
+atlas@cyberdeck:~$ linux shell
+Ubuntu shell mode enabled.
+Type 'exit' to return to Atlas.
+
+root@atlas:~#
+```
+
+And return to Atlas without unnecessarily stopping Linux:
+
+```console
+root@atlas:~# exit
+Welcome back to Atlas shell.
+
+atlas@cyberdeck:~$
+```
+
+Current Linux commands:
+
+```text
+linux status
+linux start
+linux stop
+linux shell
+```
+
+---
+
+### Ubuntu Shell Identity
+
+Added dedicated Ubuntu terminal presentation.
+
+The shell now visually differentiates environments:
+
+```text
+Atlas Shell       → Atlas application identity
+Ubuntu Shell      → Black / Matrix green
+Safe Mode         → Black / yellow
+Recovery Mode     → Black / amber
+```
+
+Safety identity takes precedence over normal shell identity.
+
+---
+
+### Guest Command Execution
+
+Added real command execution inside the running Ubuntu guest.
+
+The guest executor supports:
+
+- command submission
+- stdout capture
+- stderr capture
+- exit-code tracking
+- command completion
+- command-specific timeouts
+- runtime-death detection
+- package-command handling
+- recovery restrictions
+- safety escalation
+
+---
+
+### Streaming Linux Output
+
+Added streamed guest command output.
+
+Long-running Linux commands can now update the Atlas terminal while they execute instead of waiting for the entire command to finish before displaying output.
+
+This significantly improves package-management and diagnostic workflows.
+
+---
+
+### Nonblocking Runtime Execution
+
+Moved guest command work away from the Android UI thread.
+
+Coroutine-based execution prevents Linux commands from unnecessarily blocking Compose rendering or creating avoidable application-not-responding behavior.
+
+---
+
+### Interactive Command Guard
+
+Added protection against commands requiring terminal behavior Atlas does not yet fully provide.
+
+Commands that require a true PTY can be blocked or handled explicitly instead of being presented as fully supported interactive applications.
+
+---
+
+## Networking
+
+### Android DNS Synchronization
+
+Added synchronization between Android's active DNS configuration and the Ubuntu guest.
+
+Atlas now updates guest resolver configuration from the Android network environment rather than relying on a hard-coded public DNS server.
+
+The guest can use:
+
+```text
+/etc/resolv.conf
+```
+
+with current Android DNS information.
+
+---
+
+### Functional Linux Networking
+
+Validated Linux name resolution and package-network access inside the Ubuntu guest.
 
 Example:
 
-```text
-mkdir Project
-cd Project
-touch hello.txt
-echo Atlas Cyberdeck > hello.txt
-cat hello.txt
-pwd
-ls
+```console
+root@atlas:~# apt update
 ```
 
-Scripts can be executed using:
-
-```text
-runscript example.ash
-```
-
-#### Plugin Framework
-
-- `TerminalPlugin` interface
-- `PluginInfo` metadata model
-- `PluginRegistry`
-- Plugin registration
-- Plugin initialization
-- Core plugin
-- Installed-plugin discovery
-- `plugins` terminal command
-
-The current plugin system establishes the architectural foundation for
-future extensibility. Dynamic external plugin loading is not yet implemented.
-
-#### System Information
-
-- Centralized `VersionInfo`
-- Atlas Cyberdeck name
-- Version information
-- Build information
-- Release codename
-- Atlas Labs attribution
-- `version` command
-- Updated `neofetch` information
-
-#### Diagnostics
-
-- Built-in `diagnostics` command
-- Filesystem status reporting
-- Command registry status reporting
-- Handler registry status reporting
-- Plugin registry status reporting
-- Registered command count
-- Registered handler count
-- Registered plugin count
-- Overall system health reporting
-
-#### Testing
-
-- Virtual filesystem unit tests
-- Terminal architecture testing
-- Script execution validation
-- Command dispatcher validation
-- Registry validation
-- Release smoke testing
-
-#### Continuous Integration
-
-- GitHub Actions CI workflow
-- Automated project validation
-- Automated unit-test execution
-- Build verification on repository changes
-
-#### Documentation
-
-- Expanded project README
-- Architecture documentation
-- Roadmap documentation
-- Changelog
-- Architecture Decision Records
-- Engineering documentation
-- Security policy
-- Contributing guide
-- Code of conduct
-- Style documentation
+can operate through the device's active Android network connection.
 
 ---
 
-### Changed
+## Linux Filesystem Compatibility
 
-#### Terminal Architecture
+### PRoot Link-to-Symlink Support
 
-Refactored terminal command processing into a modular architecture.
+Added PRoot link-to-symlink behavior required for improved Debian package compatibility.
 
-Previous architecture:
-
-```text
-TerminalCommandProcessor
-        │
-        ├── UtilityCommands
-        ├── FileCommands
-        ├── DirectoryCommands
-        └── TextCommands
-```
-
-Current architecture:
+Runtime support includes:
 
 ```text
-User Input
-    │
-    ▼
-Alias Resolution
-    │
-    ▼
-Variable Expansion
-    │
-    ▼
-Wildcard Expansion
-    │
-    ▼
-Pipe Engine
-    │
-    ▼
-Command Dispatcher
-    │
-    ▼
-Handler Registry
-    │
-    ▼
-Command Handlers
+--link2symlink
+-L
 ```
 
-This reduces coupling between the terminal processor and individual
-command implementations.
+---
 
-#### Command Dispatch
+### Dedicated `.l2s` State
 
-- Moved command-routing responsibility into `CommandDispatcher`
-- Replaced direct command-group dispatch with handler-based dispatch
-- Introduced a common `CommandHandler` contract
-- Moved handler discovery into `HandlerRegistry`
-- Reduced responsibilities inside `TerminalCommandProcessor`
-
-#### Command Registry
-
-- Centralized terminal command metadata
-- Added command descriptions
-- Added usage information
-- Added command categories
-- Connected help functionality to registry metadata
-- Connected command completion to centralized command information
-
-#### Aliases
-
-Improved command alias handling.
-
-Current aliases include:
+Added dedicated link-to-symlink state storage through:
 
 ```text
-ll  -> ls
-dir -> ls
-cls -> clear
-md  -> mkdir
-rd  -> rmdir
+PROOT_L2S_DIR
 ```
 
-#### Script Execution
+Atlas preserves this state because it can be required for Linux filesystem and package consistency.
 
-Moved script execution from a hardcoded demonstration into the virtual
-filesystem.
+---
 
-Atlas Cyberdeck can now create, store, read, and execute `.ash` scripts
-inside its virtual environment.
+### Runtime Temporary Storage
 
-#### Development Workflow
+Separated host-side PRoot temporary storage from guest-side Linux `/tmp`.
 
-Standardized the development cycle around:
+Guest processes now use normal Linux temporary paths:
+
+```text
+TMPDIR=/tmp
+TMP=/tmp
+TEMP=/tmp
+```
+
+while PRoot implementation storage remains host-managed.
+
+---
+
+### Linux Pseudo-Filesystem Bindings
+
+Added required runtime bindings for:
+
+```text
+/dev
+/proc
+/sys
+```
+
+---
+
+## Package Management
+
+### Debian Package Tools
+
+Added functional support for:
+
+```text
+apt
+apt-get
+dpkg
+```
+
+Example:
+
+```console
+root@atlas:~# apt install -y python3
+...
+Atlas package health: CLEAN
+
+root@atlas:~# python3 --version
+Python 3.12.3
+```
+
+---
+
+### Explicit Package Confirmation Policy
+
+Added package-command policy requiring explicit user intent for mutating package operations.
+
+Atlas does not silently append confirmation flags to package commands.
+
+---
+
+### Package Preflight Health Gate
+
+Added a pre-transaction health check before normal package mutation.
+
+Atlas can block risky package operations when Debian package state is already unhealthy.
+
+Approved recovery commands remain available through the controlled recovery workflow.
+
+---
+
+### Post-Transaction Package Audit
+
+Added package-state auditing after package mutation.
+
+The runtime can report:
+
+```text
+Atlas package health: CLEAN
+```
+
+or warn when package state remains inconsistent.
+
+---
+
+### Original Exit-Code Preservation
+
+Changed package execution so the **original package command result remains authoritative**.
+
+A clean post-command audit does not convert a failed package command into a successful command.
+
+This is especially important during recovery.
+
+---
+
+### Package Integrity Detection
+
+Added recognition of package-state failures that should escalate runtime safety.
+
+Package-integrity failures can now trip the Linux runtime circuit breaker instead of being treated as ordinary command errors.
+
+---
+
+# Runtime Safety
+
+## Runtime Circuit Breaker
+
+Added a fail-closed runtime safety subsystem.
+
+The circuit breaker can activate after serious conditions such as:
+
+- runtime process loss
+- runtime integrity failure
+- guest health failure
+- package-state failure
+- filesystem failure
+- explicit developer safety testing
+
+Current safety states:
+
+```text
+NORMAL
+SAFE_MODE
+RECOVERY_ARMED
+```
+
+---
+
+### Safe Mode
+
+Added `SAFE_MODE`.
+
+When Safe Mode is active:
+
+- normal Linux startup is blocked
+- ordinary Ubuntu shell entry is blocked
+- safety state is persisted
+- the Linux Manager reflects the restriction
+- terminal messaging explains the next recovery step
+- safety status is visible across the application
+
+---
+
+### Recovery-Armed Mode
+
+Added `RECOVERY_ARMED`.
+
+Recovery mode allows Linux to start under restricted conditions so approved repair and diagnostic commands can run.
+
+Normal unrestricted guest operation does not resume until Atlas verifies recovery.
+
+---
+
+### Safety Commands
+
+Added:
+
+```text
+safety status
+safety recover
+safety trip-test
+safety reset --force
+```
+
+`trip-test` exists for developer validation.
+
+`reset --force` is a developer escape hatch and does not replace verified recovery.
+
+---
+
+### Controlled Recovery Policy
+
+Added recovery-specific guest command restrictions.
+
+Recovery operations can include approved commands such as:
+
+```text
+dpkg --configure -a
+dpkg --configure --pending
+apt --fix-broken install -y
+apt-get -f install -y
+```
+
+Diagnostic commands may also be permitted where appropriate.
+
+---
+
+### Verified Recovery
+
+Added verified recovery semantics.
+
+Recovery is cleared only when:
+
+1. an approved repair operation is executed;
+2. the repair command itself succeeds;
+3. post-repair package health is verified as clean.
+
+A diagnostic-only audit is not enough to clear the safety latch.
+
+A failed repair followed by a clean audit is also not enough to clear recovery.
+
+---
+
+### Persistent Safety State
+
+Added local persistence for runtime safety state.
+
+Safety state survives ordinary application recreation and is restored before the UI begins observing runtime safety.
+
+---
+
+### Fail-Closed Safety Record Handling
+
+Changed corrupted or unreadable safety state behavior.
+
+If Atlas cannot reliably read the runtime safety record, the runtime now fails closed into:
+
+```text
+SAFE_MODE
+```
+
+with a runtime-integrity reason instead of assuming the system is safe.
+
+---
+
+### Reactive Safety State
+
+Added `StateFlow`-based runtime safety observation.
+
+Safety changes can propagate to:
+
+- Terminal
+- Linux Manager
+- app-wide safety banner
+- diagnostics
+- status
+- neofetch
+
+without each surface independently reconstructing runtime state.
+
+---
+
+### App-Wide Safety Banner
+
+Added an application-level safety banner.
+
+Safe Mode and Recovery Mode can now remain visible outside the terminal screen.
+
+---
+
+### Safety-Aware Linux Manager
+
+Updated Linux controls to reflect runtime safety.
+
+Examples include:
+
+- Linux start disabled in Safe Mode
+- recovery-specific start behavior
+- install/remove operations safety-locked when required
+- safety reason surfaced to the user
+- stop behavior retained when appropriate
+
+---
+
+## Diagnostics
+
+### Runtime Diagnostics Expansion
+
+Expanded `diagnostics` to include Linux runtime and safety information.
+
+Current diagnostic areas include:
+
+```text
+Version
+Filesystem
+Runtime Storage
+Command Registry
+Handlers
+Plugins
+Linux Runtime
+Runtime Assets
+Runtime Safety
+Safety Tripped
+Runtime Access
+Safety Reason
+Safety Cleanup
+Runtime ABI
+Device Profile
+Overall Status
+```
+
+---
+
+### Safety-Aware Status
+
+Updated:
+
+```text
+status
+```
+
+to report safety and runtime-access state.
+
+---
+
+### Safety-Aware Neofetch
+
+Updated:
+
+```text
+neofetch
+```
+
+to report safety mode, access state, and safety reason when appropriate.
+
+---
+
+## Fixed
+
+### `linux shell` Regression
+
+Fixed a regression where the Linux runtime could start successfully but the `linux shell` command surface was accidentally lost.
+
+The expected command contract is restored:
+
+```text
+linux status
+linux start
+linux stop
+linux shell
+```
+
+---
+
+### Safe Mode Startup Bypass
+
+Fixed a safety flaw where Linux startup could bypass the circuit breaker through a higher-level runtime-control path.
+
+Runtime startup now checks the safety gate before allowing a normal start.
+
+A secondary launch-specification safety gate remains in place as additional protection.
+
+---
+
+### Recovery False-Positive Clearing
+
+Fixed a recovery flaw where a failed package-repair command could incorrectly return Atlas to `NORMAL` when a subsequent audit happened to report clean package state.
+
+Recovery now requires the repair command itself to succeed.
+
+---
+
+### JVM Test Runtime Coupling
+
+Fixed an early regression-test design that attempted to directly execute Android/runtime-dependent singleton behavior in local JVM tests.
+
+Runtime command-contract tests now validate the command surface without requiring Android path initialization or a running PRoot environment.
+
+---
+
+### Runtime State Reconciliation
+
+Improved handling of stale application runtime state when the underlying PRoot process is no longer alive.
+
+Runtime session state and repository state are reconciled against actual process state rather than being trusted blindly.
+
+---
+
+## Changed
+
+### Runtime Ownership
+
+Refined runtime responsibilities so application layers no longer share Linux process state implicitly.
+
+Conceptual ownership now follows:
+
+```text
+Repository          → installation/runtime data model
+Controller          → runtime orchestration
+Backend             → runtime implementation
+Process Launcher    → native process creation
+Guest Executor      → Linux command execution
+State Machine       → pure safety transitions
+Circuit Breaker     → safety persistence and side effects
+UI                  → authoritative-state rendering
+```
+
+---
+
+### Linux Shell Routing
+
+Changed terminal processing so active Ubuntu shell commands are routed before ordinary Atlas command parsing.
+
+This preserves the distinction between:
+
+```text
+atlas@cyberdeck:~$
+```
+
+and:
+
+```text
+root@atlas:~#
+```
+
+---
+
+### Recovery Command Authority
+
+Changed recovery semantics so the repair command exit code is authoritative.
+
+Post-command audit status supplements the result but does not overwrite it.
+
+---
+
+### Development Model
+
+Updated project terminology and documentation around **engineering phases**.
+
+Current workflow:
 
 ```text
 Design
@@ -265,134 +740,223 @@ Build
   ↓
 Test
   ↓
-Commit
+Device Validation
   ↓
-Continuous Integration
+Lock
+  ↓
+Commit / Push
 ```
 
 ---
 
-### Current Terminal Commands
+# Testing
 
-The command registry currently includes commands such as:
+## Linux Command Contract Tests
+
+Added regression protection for the Linux command surface.
+
+Coverage includes:
+
+- `linux shell`
+- normal shell entry
+- Safe Mode shell blocking
+- Recovery Mode shell entry
+- runtime-start Safe Mode blocking
+- expected Linux command usage text
+
+---
+
+## Runtime Safety State-Machine Tests
+
+Added pure JVM tests for safety transitions.
+
+Coverage includes:
 
 ```text
-cat
-cd
-clear
-cp
-diagnostics
-echo
-find
-grep
-head
-help
-history
-ls
-mkdir
-mv
-neofetch
-plugins
-pwd
-rm
-rmdir
-runscript
-sort
-status
-tail
-touch
-tree
-uniq
-version
-wc
-whoami
+NORMAL         → runtime allowed
+SAFE_MODE      → runtime blocked
+RECOVERY_ARMED → runtime allowed for recovery
+
+trip           → SAFE_MODE
+armRecovery    → RECOVERY_ARMED
+reset          → NORMAL
+fail closed    → SAFE_MODE
 ```
+
+These tests do not require:
+
+- Android
+- PRoot
+- runtime paths
+- disk persistence
+- native binaries
 
 ---
 
-### Architecture
+## Package Policy Validation
 
-Major Atlas Cyberdeck terminal services now include:
+Expanded package-management validation around:
+
+- explicit confirmation
+- preflight health checks
+- post-transaction auditing
+- repair-command handling
+- original exit-code preservation
+- recovery verification
+
+---
+
+## Physical Device Validation
+
+Runtime-critical changes were validated on a real ARM64 Android device.
+
+Validated workflows include:
 
 ```text
-Terminal Services
-│
-├── Command Registry
-├── Command Dispatcher
-├── Handler Registry
-├── Command History
-├── Alias Resolution
-├── Variable Expansion
-├── Wildcard Expansion
-├── Command Completion
-├── Pipe Engine
-├── Script Engine
-└── Plugin Registry
+Linux start
+Linux stop
+Ubuntu shell entry
+Ubuntu shell exit
+Python execution
+DNS synchronization
+apt update
+package installation
+package auditing
+Safe Mode
+Recovery Mode
+verified recovery
+runtime diagnostics
 ```
-
-The architecture is designed around:
-
-- Separation of concerns
-- Single responsibility
-- Delegation
-- Unidirectional data flow
-- Testability
-- Maintainability
-- Extensibility
-- Portability
 
 ---
 
-### Validation
+# Documentation
 
-The Foundation milestone was validated using the automated unit-test suite:
+## README
+
+Rebuilt the project README around the current product rather than the earlier terminal-only foundation.
+
+The public description now reflects:
+
+- real Ubuntu ARM64
+- rootless PRoot execution
+- package management
+- runtime safety
+- recovery
+- Linux diagnostics
+- current testing strategy
+- current architecture
+
+---
+
+## Roadmap
+
+Rebuilt the roadmap around public product phases while retaining the complete internal engineering completion record.
+
+Internal milestones through:
+
+```text
+F3P-H5B
+```
+
+remain documented for traceability.
+
+---
+
+## Architecture
+
+Expanded architecture documentation to cover:
+
+- Android application layer
+- Atlas shell
+- command architecture
+- virtual filesystem
+- script engine
+- plugin foundation
+- runtime controller
+- backend abstraction
+- PRoot
+- Ubuntu RootFS
+- guest executor
+- DNS synchronization
+- package-management policy
+- runtime safety
+- recovery
+- testing
+- CI
+- SOLID boundaries
+
+---
+
+# Validation
+
+Standard automated validation:
 
 ```bash
 ./gradlew testDebugUnitTest
-```
-
-Result:
-
-```text
-BUILD SUCCESSFUL
-```
-
-The debug application build was also validated using:
-
-```bash
 ./gradlew assembleDebug
 ```
 
-Result:
+Physical-device installation validation:
 
-```text
-BUILD SUCCESSFUL
+```bash
+./gradlew installDebug
 ```
 
-Terminal smoke testing verified:
-
-```text
-version
-diagnostics
-plugins
-help
-pwd
-ls
-neofetch
-runscript demo.ash
-```
-
-All milestone validation tests passed before release preparation.
+Runtime-critical phases are not considered complete based on compilation alone.
 
 ---
 
-## Earlier Development
+# Engineering Traceability
 
-Atlas Cyberdeck evolved incrementally through a series of early alpha
-releases and engineering sprints.
+The current Linux-runtime engineering track is complete through:
 
-The following entries document releases that were explicitly recorded in
-the project's earlier changelog history.
+```text
+F3P-H5B
+```
+
+Detailed phase history is maintained in:
+
+[`ROADMAP.md`](ROADMAP.md)
+
+Architecture details are maintained in:
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md)
+
+---
+
+# Earlier Releases
+
+The following entries preserve earlier explicitly recorded Atlas Cyberdeck release history.
+
+---
+
+## v0.10.0-alpha — Foundation
+
+### Added
+
+- modular terminal architecture
+- persistent virtual filesystem
+- command registry
+- command dispatcher
+- command-handler registry
+- command history
+- aliases
+- environment variables
+- wildcard expansion
+- command pipelines
+- command completion
+- Atlas `.ash` script engine
+- plugin framework foundation
+- version service
+- diagnostics
+- automated unit testing
+- GitHub Actions CI
+- architecture and engineering documentation
+
+### Architecture
+
+The v0.10.0-alpha line established the application architecture that later supported the real Linux runtime.
 
 ---
 
@@ -403,7 +967,7 @@ the project's earlier changelog history.
 - `LinuxDistribution` model
 - `LinuxInstallation` model
 - `LinuxRepository`
-- Linux domain layer
+- Linux domain foundation
 
 ---
 
@@ -411,8 +975,8 @@ the project's earlier changelog history.
 
 ### Fixed
 
-- Dashboard state management
-- Stable dashboard build
+- dashboard state management
+- stable dashboard build
 
 ---
 
@@ -420,8 +984,8 @@ the project's earlier changelog history.
 
 ### Added
 
-- Boot sequence
-- Boot navigation
+- boot sequence
+- boot navigation
 
 ---
 
@@ -429,7 +993,7 @@ the project's earlier changelog history.
 
 ### Added
 
-- Navigation architecture
+- navigation architecture
 
 ---
 
@@ -437,35 +1001,36 @@ the project's earlier changelog history.
 
 ### Added
 
-- Initial Atlas Cyberdeck dashboard
+- initial Atlas Cyberdeck dashboard
 
 ---
 
-## Development Status
+# Current Development Status
 
 Atlas Cyberdeck remains under active alpha development.
 
-The `v0.13.0-alpha` Foundation milestone establishes the architectural
-base for continued work on:
+The current focus is **documentation and product readiness** following the Linux runtime and safety hardening work completed through `F3P-H5B`.
 
-- Expanded shell scripting
-- Plugin architecture
-- Networking tools
-- SSH
-- Git integration
-- Rootless Linux runtime
-- Package management
-- Additional filesystem capabilities
-- Expanded automated testing
-- Desktop support
-- Dedicated cyberdeck hardware
+Upcoming product work is tracked in:
+
+[`ROADMAP.md`](ROADMAP.md)
 
 ---
 
+<div align="center">
+
 ## Atlas Labs
 
-Atlas Cyberdeck is developed by Atlas Labs with a focus on clean
-architecture, maintainable software, continuous improvement, and
-long-term extensibility.
+### **Build the platform. Prove the runtime. Earn the trust.**
+
+<br>
 
 > *"Maybe not breaking free from the Matrix—but we are writing our own code instead of living inside someone else's. That is a pretty good way to spend our time."*
+
+<br>
+
+**Atlas Cyberdeck — v0.13.0-alpha**
+
+### **Your Cyberdeck. Anywhere.**
+
+</div>
