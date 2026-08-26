@@ -18,6 +18,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -83,15 +85,18 @@ fun TerminalScreen(
      * RECOVERY_ARMED:
      *     black / amber
      *
-     * This reads the same circuit-breaker state that
-     * controls runtime access. Safety commands and guest
-     * execution already update terminal Compose state,
-     * causing this screen to recompose immediately after
-     * a mode transition.
+     * This observes the same circuit-breaker StateFlow
+     * that controls runtime access, so SAFE/RECOVERY
+     * visual changes happen immediately and do not depend
+     * on some unrelated terminal output recomposition.
      */
+    val safetySnapshot by
+    LinuxRuntimeCircuitBreaker
+        .snapshotFlow
+        .collectAsState()
+
     val safetyMode =
-        LinuxRuntimeCircuitBreaker
-            .getSnapshot()
+        safetySnapshot
             .mode
 
     val terminalBackground =

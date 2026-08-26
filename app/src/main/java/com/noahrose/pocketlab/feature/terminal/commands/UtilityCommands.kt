@@ -1,22 +1,6 @@
 package com.noahrose.pocketlab.feature.terminal.commands
 
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
-import com.noahrose.pocketlab.feature.linux.model.LinuxRuntimeStatus
-import com.noahrose.pocketlab.feature.linux.model.runtimeStatus
-import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
-import com.noahrose.pocketlab.feature.linux.rootfs.filesystem.LinuxRootfsStagingManager
-import com.noahrose.pocketlab.feature.linux.rootfs.filesystem.LinuxRootfsStagingResult
-import com.noahrose.pocketlab.feature.linux.rootfs.integrity.LinuxRootfsIntegrityValidator
-import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
-import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
-import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandExecutor
-import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandResult
-import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
-import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeAssetValidator
-import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
-import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemResult
-import com.noahrose.pocketlab.feature.linux.runtime.integrity.LinuxNativeRuntimeIntegrityValidator
-import com.noahrose.pocketlab.feature.linux.runtime.platform.LinuxRuntimeAbiDetector
 import com.noahrose.pocketlab.feature.system.DeviceInfoProvider
 import com.noahrose.pocketlab.feature.system.DeviceProfileFormatter
 import com.noahrose.pocketlab.feature.system.VersionInfo
@@ -24,14 +8,25 @@ import com.noahrose.pocketlab.feature.system.bootstrap.DeviceBootstrapManager
 import com.noahrose.pocketlab.feature.system.capability.DeviceCapabilityAnalyzer
 import com.noahrose.pocketlab.feature.system.capability.DeviceCapabilityFormatter
 import com.noahrose.pocketlab.feature.terminal.handler.CommandHandler
+import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
+import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemManager
+import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeFilesystemResult
+import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimeAssetValidator
+import com.noahrose.pocketlab.feature.linux.runtime.platform.LinuxRuntimeAbiDetector
 import com.noahrose.pocketlab.feature.terminal.handler.HandlerRegistry
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
 import com.noahrose.pocketlab.feature.terminal.plugin.PluginRegistry
 import com.noahrose.pocketlab.feature.terminal.registry.CommandRegistry
 import com.noahrose.pocketlab.feature.terminal.script.ScriptEngine
+import com.noahrose.pocketlab.feature.linux.model.LinuxRuntimeStatus
+import com.noahrose.pocketlab.feature.linux.model.runtimeStatus
+import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
+import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyMode
 
-object UtilityCommands :
-    CommandHandler {
+object UtilityCommands : CommandHandler {
 
     override fun handle(
         commandName: String,
@@ -47,14 +42,11 @@ object UtilityCommands :
                     "Available commands:"
                 )
 
-                output.add(
-                    ""
-                )
+                output.add("")
 
                 CommandRegistry
                     .getAll()
                     .groupBy { command ->
-
                         command.category
                     }
                     .toSortedMap()
@@ -70,17 +62,14 @@ object UtilityCommands :
                             )
                         )
 
-                        commands
-                            .forEach { command ->
+                        commands.forEach { command ->
 
-                                output.add(
-                                    "${command.name} - ${command.description}"
-                                )
-                            }
+                            output.add(
+                                "${command.name} - ${command.description}"
+                            )
+                        }
 
-                        output.add(
-                            ""
-                        )
+                        output.add("")
                     }
 
                 return true
@@ -89,12 +78,9 @@ object UtilityCommands :
             "sysinfo" -> {
 
                 val profile =
-                    DeviceInfoProvider
-                        .getProfile()
+                    DeviceInfoProvider.getProfile()
 
-                if (
-                    profile == null
-                ) {
+                if (profile == null) {
 
                     output.add(
                         "sysinfo: device information unavailable"
@@ -123,9 +109,7 @@ object UtilityCommands :
                     DeviceBootstrapManager
                         .getProfile()
 
-                if (
-                    profile == null
-                ) {
+                if (profile == null) {
 
                     output.add(
                         "compatibility: device profile unavailable"
@@ -161,11 +145,8 @@ object UtilityCommands :
                         parts.size < 2 ||
                         parts[1].isBlank()
                     ) {
-
                         ""
-
                     } else {
-
                         parts[1]
                             .trim()
                             .lowercase()
@@ -183,9 +164,7 @@ object UtilityCommands :
                             "Atlas Device Profile"
                         )
 
-                        output.add(
-                            ""
-                        )
+                        output.add("")
 
                         output.add(
                             "Bootstrapped : ${
@@ -201,9 +180,7 @@ object UtilityCommands :
                             DeviceBootstrapManager
                                 .getProfile()
 
-                        if (
-                            profile == null
-                        ) {
+                        if (profile == null) {
 
                             output.add(
                                 "Profile      : unavailable"
@@ -215,9 +192,7 @@ object UtilityCommands :
                                 "Profile      : loaded"
                             )
 
-                            output.add(
-                                ""
-                            )
+                            output.add("")
 
                             DeviceProfileFormatter
                                 .format(
@@ -308,8 +283,7 @@ object UtilityCommands :
                 }
 
                 val scriptName =
-                    parts[1]
-                        .trim()
+                    parts[1].trim()
 
                 if (
                     !scriptName.endsWith(
@@ -326,14 +300,11 @@ object UtilityCommands :
                 }
 
                 val scriptContent =
-                    VirtualFileSystem
-                        .readFile(
-                            scriptName
-                        )
+                    VirtualFileSystem.readFile(
+                        scriptName
+                    )
 
-                if (
-                    scriptContent == null
-                ) {
+                if (scriptContent == null) {
 
                     output.add(
                         "runscript: '$scriptName': Script not found"
@@ -346,14 +317,12 @@ object UtilityCommands :
                     "Executing script: $scriptName"
                 )
 
-                ScriptEngine
-                    .execute(
-                        script =
-                            scriptContent.lines(),
-
-                        output =
-                            output
-                    )
+                ScriptEngine.execute(
+                    script =
+                        scriptContent.lines(),
+                    output =
+                        output
+                )
 
                 return true
             }
@@ -364,9 +333,7 @@ object UtilityCommands :
                     "Installed Plugins"
                 )
 
-                output.add(
-                    ""
-                )
+                output.add("")
 
                 PluginRegistry
                     .getAll()
@@ -388,9 +355,7 @@ object UtilityCommands :
                             "Description : ${plugin.info.description}"
                         )
 
-                        output.add(
-                            ""
-                        )
+                        output.add("")
                     }
 
                 return true
@@ -423,9 +388,6 @@ object UtilityCommands :
 
             "diagnostics" -> {
 
-                LinuxRuntimeController
-                    .getSession()
-
                 val commandCount =
                     CommandRegistry
                         .getAll()
@@ -454,10 +416,13 @@ object UtilityCommands :
                     LinuxRuntimeFilesystemManager
                         .getLastPreparationResult()
 
+                val runtimeAssetStatus =
+                    LinuxRuntimeAssetValidator
+                        .getStatus()
+                        .label
+
                 val runtimeStorageStatus =
-                    when (
-                        filesystemResult
-                    ) {
+                    when (filesystemResult) {
 
                         LinuxRuntimeFilesystemResult.Ready ->
                             "READY"
@@ -469,109 +434,66 @@ object UtilityCommands :
                             "NOT PREPARED"
                     }
 
-                val runtimeAssetStatus =
-                    LinuxRuntimeAssetValidator
-                        .getStatus()
-                        .label
+                /*
+                 * H4F — runtime safety diagnostics.
+                 *
+                 * Diagnostics reads the authoritative
+                 * circuit-breaker snapshot directly so the
+                 * report always reflects the active latch.
+                 */
+                val safetySnapshot =
+                    LinuxRuntimeCircuitBreaker
+                        .getSnapshot()
 
-                val runtimeAbi =
-                    LinuxRuntimeAbiDetector
-                        .getPreferredAbi()
+                val safetyMode =
+                    safetySnapshot
+                        .mode
 
-                val runtimeAbiStatus =
-                    runtimeAbi
-                        ?.let { abi ->
-
-                            "${abi.displayName} (${abi.androidName})"
-                        }
-                        ?: "UNSUPPORTED"
-
-                val runtimeBinaryStatus =
-                    when (
-                        runtimeAbi
-                            ?.androidName
+                val safetyTripped =
+                    if (
+                        safetySnapshot
+                            .tripped
                     ) {
-
-                        "arm64-v8a" ->
-                            "proot-arm64-v8a"
-
-                        "armeabi-v7a" ->
-                            "proot-armeabi-v7a"
-
-                        "x86_64" ->
-                            "proot-x86_64"
-
-                        "x86" ->
-                            "proot-x86"
-
-                        else ->
-                            "UNAVAILABLE"
+                        "YES"
+                    } else {
+                        "NO"
                     }
 
-                val runtimeIntegrity =
-                    LinuxNativeRuntimeIntegrityValidator
-                        .validate()
-
-                val rootfsStagingResult =
-                    LinuxRootfsStagingManager
-                        .getLastPreparationResult()
-
-                val rootfsStagingStatus =
+                val runtimePermission =
                     when (
-                        rootfsStagingResult
+                        safetyMode
                     ) {
 
-                        LinuxRootfsStagingResult.Ready ->
-                            "READY"
+                        LinuxRuntimeSafetyMode.NORMAL ->
+                            "ENABLED"
 
-                        is LinuxRootfsStagingResult.Failure ->
+                        LinuxRuntimeSafetyMode.SAFE_MODE ->
+                            "BLOCKED"
+
+                        LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                            "RECOVERY ONLY"
+                    }
+
+                val safetyReason =
+                    safetySnapshot
+                        .reason
+                        ?.name
+                        ?: "NONE"
+
+                val cleanupStatus =
+                    when (
+                        safetySnapshot
+                            .transientCleanupSucceeded
+                    ) {
+
+                        true ->
+                            "SUCCESS"
+
+                        false ->
                             "FAILED"
 
                         null ->
-                            "NOT PREPARED"
-                    }
-
-                val rootfsIntegrity =
-                    LinuxRootfsIntegrityValidator
-                        .validate()
-
-                val rootfsSourceStatus =
-                    when (
-                        runtimeAbi
-                            ?.androidName
-                    ) {
-
-                        "arm64-v8a" ->
-                            "Ubuntu 24.04.4 LTS"
-
-                        else ->
-                            "UNAVAILABLE"
-                    }
-
-                val rootfsArchiveStatus =
-                    when (
-                        runtimeAbi
-                            ?.androidName
-                    ) {
-
-                        "arm64-v8a" ->
-                            "ubuntu-base-24.04.4-base-arm64.tar.gz"
-
-                        else ->
-                            "UNAVAILABLE"
-                    }
-
-                val runtimeSourceStatus =
-                    when (
-                        runtimeAbi
-                            ?.androidName
-                    ) {
-
-                        "arm64-v8a" ->
-                            "Atlas PRoot 5.1.107.92"
-
-                        else ->
-                            "UNAVAILABLE"
+                            "N/A"
                     }
 
                 output.add(
@@ -583,71 +505,86 @@ object UtilityCommands :
                 )
 
                 output.add(
-                    "Version           : ${VersionInfo.VERSION}"
+                    "Version          : ${VersionInfo.VERSION}"
                 )
 
                 output.add(
-                    "Filesystem        : ONLINE"
+                    "Filesystem       : ONLINE"
                 )
 
                 output.add(
-                    "Runtime Storage   : $runtimeStorageStatus"
+                    "Runtime Storage  : $runtimeStorageStatus"
                 )
 
                 output.add(
-                    "Runtime Assets    : $runtimeAssetStatus"
+                    "Command Registry : ONLINE"
                 )
 
                 output.add(
-                    "Runtime ABI       : $runtimeAbiStatus"
+                    "Handlers         : ONLINE"
                 )
 
                 output.add(
-                    "Runtime Binary    : $runtimeBinaryStatus"
+                    "Plugins          : ONLINE"
                 )
 
                 output.add(
-                    "Runtime Integrity : ${runtimeIntegrity.status.label}"
+                    "Linux Runtime    : $linuxStatus"
                 )
 
                 output.add(
-                    "Runtime Source    : $runtimeSourceStatus"
+                    "Runtime Assets   : $runtimeAssetStatus"
                 )
 
                 output.add(
-                    "Rootfs Source     : $rootfsSourceStatus"
+                    "Runtime Safety   : ${safetyMode.name}"
                 )
 
                 output.add(
-                    "Rootfs Archive    : $rootfsArchiveStatus"
+                    "Safety Tripped   : $safetyTripped"
                 )
 
                 output.add(
-                    "Rootfs Staging    : $rootfsStagingStatus"
+                    "Runtime Access   : $runtimePermission"
                 )
 
                 output.add(
-                    "Rootfs Integrity  : ${rootfsIntegrity.status.label}"
+                    "Safety Reason    : $safetyReason"
                 )
 
                 output.add(
-                    "Command Registry  : ONLINE"
+                    "Safety Cleanup   : $cleanupStatus"
+                )
+
+                safetySnapshot
+                    .message
+                    ?.takeIf { message ->
+                        message.isNotBlank()
+                    }
+                    ?.let { message ->
+
+                        output.add(
+                            "Safety Message   : $message"
+                        )
+                    }
+
+                val runtimeAbi =
+                    LinuxRuntimeAbiDetector
+                        .getPreferredAbi()
+
+                val runtimeAbiStatus =
+                    runtimeAbi
+                        ?.let { abi ->
+                            "${abi.displayName} (${abi.androidName})"
+                        }
+                        ?: "UNSUPPORTED"
+
+                output.add(
+                    "Runtime ABI      : $runtimeAbiStatus"
                 )
 
                 output.add(
-                    "Handlers          : ONLINE"
-                )
-
-                output.add(
-                    "Plugins           : ONLINE"
-                )
-
-                output.add(
-                    "Linux Runtime     : $linuxStatus"
-                )
-
-                output.add(
-                    "Device Profile    : ${
+                    "Device Profile   : ${
                         if (
                             DeviceBootstrapManager
                                 .isBootstrapped()
@@ -669,49 +606,7 @@ object UtilityCommands :
                     )
 
                     output.add(
-                        "Runtime Error    : ${filesystemResult.message}"
-                    )
-                }
-
-                if (
-                    runtimeIntegrity
-                        .message != null
-                ) {
-
-                    output.add(
-                        ""
-                    )
-
-                    output.add(
-                        "Runtime Integrity Error : ${runtimeIntegrity.message}"
-                    )
-                }
-
-                if (
-                    rootfsStagingResult is
-                            LinuxRootfsStagingResult.Failure
-                ) {
-
-                    output.add(
-                        ""
-                    )
-
-                    output.add(
-                        "Rootfs Staging Error : ${rootfsStagingResult.message}"
-                    )
-                }
-
-                if (
-                    rootfsIntegrity
-                        .message != null
-                ) {
-
-                    output.add(
-                        ""
-                    )
-
-                    output.add(
-                        "Rootfs Integrity Error : ${rootfsIntegrity.message}"
+                        "Runtime Error   : ${filesystemResult.message}"
                     )
                 }
 
@@ -720,15 +615,15 @@ object UtilityCommands :
                 )
 
                 output.add(
-                    "Commands          : $commandCount"
+                    "Commands         : $commandCount"
                 )
 
                 output.add(
-                    "Handlers          : $handlerCount"
+                    "Handlers         : $handlerCount"
                 )
 
                 output.add(
-                    "Plugins           : $pluginCount"
+                    "Plugins          : $pluginCount"
                 )
 
                 output.add(
@@ -742,24 +637,20 @@ object UtilityCommands :
                                 LinuxRuntimeFilesystemResult.Failure ->
                             "DEGRADED"
 
-                        runtimeIntegrity
-                            .message != null ->
-                            "DEGRADED"
+                        safetyMode ==
+                                LinuxRuntimeSafetyMode.SAFE_MODE ->
+                            "SAFE MODE"
 
-                        rootfsStagingResult is
-                                LinuxRootfsStagingResult.Failure ->
-                            "DEGRADED"
-
-                        rootfsIntegrity
-                            .message != null ->
-                            "DEGRADED"
+                        safetyMode ==
+                                LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                            "RECOVERY"
 
                         else ->
                             "HEALTHY"
                     }
 
                 output.add(
-                    "Overall Status    : $overallStatus"
+                    "Overall Status   : $overallStatus"
                 )
 
                 return true
@@ -768,12 +659,9 @@ object UtilityCommands :
             "history" -> {
 
                 val history =
-                    CommandHistory
-                        .getHistory()
+                    CommandHistory.getHistory()
 
-                if (
-                    history.isEmpty()
-                ) {
+                if (history.isEmpty()) {
 
                     output.add(
                         "No commands in history."
@@ -781,15 +669,14 @@ object UtilityCommands :
 
                 } else {
 
-                    history
-                        .forEachIndexed {
-                                index,
-                                command ->
+                    history.forEachIndexed {
+                            index,
+                            command ->
 
-                            output.add(
-                                "${index + 1}  $command"
-                            )
-                        }
+                        output.add(
+                            "${index + 1}  $command"
+                        )
+                    }
                 }
 
                 return true
@@ -828,9 +715,6 @@ object UtilityCommands :
 
             "status" -> {
 
-                LinuxRuntimeController
-                    .getSession()
-
                 val installation =
                     LinuxRepository
                         .getInstallation()
@@ -851,103 +735,87 @@ object UtilityCommands :
                             "STOPPED"
                     }
 
+                val safetySnapshot =
+                    LinuxRuntimeCircuitBreaker
+                        .getSnapshot()
+
                 output.add(
                     "Atlas Cyberdeck"
                 )
 
                 output.add(
-                    "Status : ONLINE"
+                    "Status         : ONLINE"
                 )
 
                 output.add(
-                    "Linux : $linuxStatus"
+                    "Safety         : ${
+                        safetyLabel(
+                            safetySnapshot.mode
+                        )
+                    }"
+                )
+
+                if (
+                    safetySnapshot.reason !=
+                    null
+                ) {
+
+                    output.add(
+                        "Safety Reason  : ${safetySnapshot.reason.name}"
+                    )
+                }
+
+                output.add(
+                    "Linux          : $linuxStatus"
                 )
 
                 output.add(
-                    "Terminal : ACTIVE"
+                    "Runtime Access : ${
+                        runtimeAccessLabel(
+                            safetySnapshot.mode
+                        )
+                    }"
+                )
+
+                output.add(
+                    "Terminal       : ACTIVE"
                 )
 
                 return true
             }
 
-            /*
-             * ------------------------------------------------
-             * LINUX
-             * ------------------------------------------------
-             */
             "linux" -> {
-
-                /*
-                 * TerminalCommandProcessor currently
-                 * supplies most handlers as:
-                 *
-                 * [linux, "exec whoami"]
-                 *
-                 * Reconstructing the tail supports
-                 * both grouped and tokenized inputs.
-                 */
-                val rawArguments =
-                    parts
-                        .drop(
-                            1
-                        )
-                        .joinToString(
-                            " "
-                        )
-                        .trim()
 
                 val action =
                     if (
-                        rawArguments.isBlank()
+                        parts.size < 2 ||
+                        parts[1].isBlank()
                     ) {
-
                         "status"
-
                     } else {
-
-                        rawArguments
-                            .substringBefore(
-                                " "
-                            )
+                        parts[1]
                             .trim()
                             .lowercase()
                     }
 
-                val actionArguments =
-                    rawArguments
-                        .substringAfter(
-                            " ",
-                            ""
-                        )
-                        .trim()
-
                 when (action) {
 
                     "status" -> {
-
-                        LinuxRuntimeController
-                            .getSession()
 
                         val installation =
                             LinuxRepository
                                 .getInstallation()
 
                         val installationStatus =
-                            if (
-                                installation.installed
-                            ) {
-
+                            if (installation.installed) {
                                 "INSTALLED"
-
                             } else {
-
                                 "NOT INSTALLED"
                             }
 
                         val runtimeStatus =
                             when (
-                                installation
-                                    .runtimeStatus()
+                                installation.runtimeStatus()
                             ) {
 
                                 LinuxRuntimeStatus.NOT_INSTALLED ->
@@ -965,9 +833,7 @@ object UtilityCommands :
                                 .name
                                 .lowercase()
                                 .replaceFirstChar { character ->
-
-                                    character
-                                        .uppercase()
+                                    character.uppercase()
                                 }
 
                         output.add(
@@ -1039,6 +905,17 @@ object UtilityCommands :
                                 )
                             }
 
+                            LinuxRuntimeControlResult.SAFE_MODE_BLOCKED -> {
+
+                                output.add(
+                                    "linux: runtime startup blocked by Atlas Safe Mode."
+                                )
+
+                                output.add(
+                                    "Run 'safety recover' to begin controlled recovery."
+                                )
+                            }
+
                             else -> {
 
                                 output.add(
@@ -1051,15 +928,6 @@ object UtilityCommands :
                     }
 
                     "stop" -> {
-
-                        if (
-                            LinuxShellMode
-                                .isActive()
-                        ) {
-
-                            LinuxShellMode
-                                .exit()
-                        }
 
                         when (
                             LinuxRuntimeController
@@ -1099,214 +967,85 @@ object UtilityCommands :
                     }
 
                     /*
-                     * ------------------------------------------------
-                     * INTERACTIVE-LIKE UBUNTU SHELL MODE
-                     * ------------------------------------------------
+                     * H4G hotfix — restore the persistent
+                     * Ubuntu shell command that was lost when
+                     * UtilityCommands was based on an older
+                     * status/start/stop-only revision.
+                     *
+                     * SAFE_MODE must never enter the guest.
+                     * RECOVERY_ARMED may enter because the
+                     * guest executor itself restricts commands
+                     * to the approved recovery policy.
                      */
                     "shell" -> {
 
-                        val installation =
-                            LinuxRepository
-                                .getInstallation()
+                        val safetySnapshot =
+                            LinuxRuntimeCircuitBreaker
+                                .getSnapshot()
 
                         if (
-                            !installation.installed
+                            safetySnapshot.mode ==
+                            LinuxRuntimeSafetyMode.SAFE_MODE
                         ) {
 
                             output.add(
-                                "linux: Ubuntu is not installed."
+                                "linux: Ubuntu shell blocked by Atlas Safe Mode."
+                            )
+
+                            output.add(
+                                "Run 'safety recover' to begin controlled recovery."
                             )
 
                             return true
                         }
 
-                        if (
-                            !installation.running
-                        ) {
+                        val entered =
+                            LinuxShellMode
+                                .enter()
+
+                        if (!entered) {
 
                             output.add(
                                 "linux: Ubuntu runtime is not running."
                             )
 
                             output.add(
-                                "Start it with: linux start"
+                                "Run 'linux start' first."
                             )
 
                             return true
                         }
 
-                        if (
-                            LinuxShellMode
-                                .isActive()
-                        ) {
-
-                            output.add(
-                                "Ubuntu shell mode is already active."
-                            )
-
-                            return true
-                        }
-
-                        if (
-                            LinuxShellMode
-                                .enter()
-                        ) {
-
-                            output.add(
+                        output.add(
+                            if (
+                                safetySnapshot.mode ==
+                                LinuxRuntimeSafetyMode.RECOVERY_ARMED
+                            ) {
+                                "Ubuntu recovery shell mode enabled."
+                            } else {
                                 "Ubuntu shell mode enabled."
-                            )
+                            }
+                        )
+
+                        output.add(
+                            if (
+                                safetySnapshot.mode ==
+                                LinuxRuntimeSafetyMode.RECOVERY_ARMED
+                            ) {
+                                "Only approved recovery and diagnostic commands are allowed."
+                            } else {
+                                "Type 'exit' to return to Atlas."
+                            }
+                        )
+
+                        if (
+                            safetySnapshot.mode ==
+                            LinuxRuntimeSafetyMode.RECOVERY_ARMED
+                        ) {
 
                             output.add(
                                 "Type 'exit' to return to Atlas."
                             )
-
-                        } else {
-
-                            output.add(
-                                "linux: unable to enter Ubuntu shell."
-                            )
-                        }
-
-                        return true
-                    }
-
-                    /*
-                     * ------------------------------------------------
-                     * ONE-SHOT UBUNTU COMMAND
-                     * ------------------------------------------------
-                     */
-                    "exec" -> {
-
-                        val command =
-                            actionArguments
-
-                        if (
-                            command.isBlank()
-                        ) {
-
-                            output.add(
-                                "Usage: linux exec <command>"
-                            )
-
-                            return true
-                        }
-
-                        val installation =
-                            LinuxRepository
-                                .getInstallation()
-
-                        if (
-                            !installation.installed
-                        ) {
-
-                            output.add(
-                                "linux: Ubuntu is not installed."
-                            )
-
-                            return true
-                        }
-
-                        if (
-                            !installation.running
-                        ) {
-
-                            output.add(
-                                "linux: Ubuntu runtime is not running."
-                            )
-
-                            output.add(
-                                "Start it with: linux start"
-                            )
-
-                            return true
-                        }
-
-                        when (
-                            val result =
-                                LinuxGuestCommandExecutor
-                                    .execute(
-                                        command
-                                    )
-                        ) {
-
-                            is LinuxGuestCommandResult.Success -> {
-
-                                if (
-                                    result.output
-                                        .isNotBlank()
-                                ) {
-
-                                    result.output
-                                        .lines()
-                                        .forEach { line ->
-
-                                            output.add(
-                                                line
-                                            )
-                                        }
-                                }
-
-                                if (
-                                    result.errorOutput
-                                        .isNotBlank()
-                                ) {
-
-                                    result.errorOutput
-                                        .lines()
-                                        .forEach { line ->
-
-                                            output.add(
-                                                line
-                                            )
-                                        }
-                                }
-
-                                if (
-                                    result.exitCode != 0
-                                ) {
-
-                                    output.add(
-                                        "linux: command exited with code ${result.exitCode}"
-                                    )
-                                }
-                            }
-
-                            is LinuxGuestCommandResult.Failure -> {
-
-                                output.add(
-                                    "linux: ${result.message}"
-                                )
-
-                                if (
-                                    result.output
-                                        .isNotBlank()
-                                ) {
-
-                                    result.output
-                                        .lines()
-                                        .forEach { line ->
-
-                                            output.add(
-                                                line
-                                            )
-                                        }
-                                }
-
-                                if (
-                                    result.errorOutput
-                                        .isNotBlank()
-                                ) {
-
-                                    result.errorOutput
-                                        .lines()
-                                        .forEach { line ->
-
-                                            output.add(
-                                                line
-                                            )
-                                        }
-                                }
-                            }
                         }
 
                         return true
@@ -1315,11 +1054,7 @@ object UtilityCommands :
                     else -> {
 
                         output.add(
-                            "Usage: linux [status|start|stop|shell|exec]"
-                        )
-
-                        output.add(
-                            "       linux exec <command>"
+                            "Usage: linux [status|start|stop|shell]"
                         )
 
                         return true
@@ -1329,9 +1064,6 @@ object UtilityCommands :
 
             "neofetch" -> {
 
-                LinuxRuntimeController
-                    .getSession()
-
                 val installation =
                     LinuxRepository
                         .getInstallation()
@@ -1340,6 +1072,10 @@ object UtilityCommands :
                     installation
                         .runtimeStatus()
                         .label
+
+                val safetySnapshot =
+                    LinuxRuntimeCircuitBreaker
+                        .getSnapshot()
 
                 output.add(
                     "${VersionInfo.NAME} ${VersionInfo.VERSION}"
@@ -1361,9 +1097,33 @@ object UtilityCommands :
                     "Shell   : Atlas Terminal"
                 )
 
+                output.add(
+                    "Safety  : ${
+                        safetyLabel(
+                            safetySnapshot.mode
+                        )
+                    }"
+                )
+
+                output.add(
+                    "Access  : ${
+                        runtimeAccessLabel(
+                            safetySnapshot.mode
+                        )
+                    }"
+                )
+
                 if (
-                    installation.installed
+                    safetySnapshot.reason !=
+                    null
                 ) {
+
+                    output.add(
+                        "Reason  : ${safetySnapshot.reason.name}"
+                    )
+                }
+
+                if (installation.installed) {
 
                     val distribution =
                         installation
@@ -1371,9 +1131,7 @@ object UtilityCommands :
                             .name
                             .lowercase()
                             .replaceFirstChar { character ->
-
-                                character
-                                    .uppercase()
+                                character.uppercase()
                             }
 
                     output.add(
@@ -1396,5 +1154,47 @@ object UtilityCommands :
         }
 
         return false
+    }
+
+    /*
+     * H4G — compact safety labels shared by quick
+     * system-status commands.
+     */
+    private fun safetyLabel(
+        mode: LinuxRuntimeSafetyMode
+    ): String {
+
+        return when (
+            mode
+        ) {
+
+            LinuxRuntimeSafetyMode.NORMAL ->
+                "NORMAL"
+
+            LinuxRuntimeSafetyMode.SAFE_MODE ->
+                "SAFE MODE"
+
+            LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                "RECOVERY ARMED"
+        }
+    }
+
+    private fun runtimeAccessLabel(
+        mode: LinuxRuntimeSafetyMode
+    ): String {
+
+        return when (
+            mode
+        ) {
+
+            LinuxRuntimeSafetyMode.NORMAL ->
+                "ENABLED"
+
+            LinuxRuntimeSafetyMode.SAFE_MODE ->
+                "BLOCKED"
+
+            LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                "RECOVERY ONLY"
+        }
     }
 }

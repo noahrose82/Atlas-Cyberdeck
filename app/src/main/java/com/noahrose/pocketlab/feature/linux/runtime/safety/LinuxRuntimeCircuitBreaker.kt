@@ -5,6 +5,9 @@ import com.noahrose.pocketlab.feature.linux.runtime.ProotLinuxRuntimeBackend
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimePathManager
 import java.io.File
 import java.util.Properties
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 enum class LinuxRuntimeSafetyMode {
     NORMAL,
@@ -58,6 +61,19 @@ object LinuxRuntimeCircuitBreaker {
     private const val KEY_CLEANUP_SUCCEEDED =
         "transientCleanupSucceeded"
 
+    /*
+     * H4C reactive safety state.
+     */
+    private val mutableSnapshotFlow =
+        MutableStateFlow(
+            LinuxRuntimeSafetySnapshot()
+        )
+
+    val snapshotFlow:
+            StateFlow<LinuxRuntimeSafetySnapshot> =
+        mutableSnapshotFlow
+            .asStateFlow()
+
     @Volatile
     private var cachedSnapshot:
             LinuxRuntimeSafetySnapshot? =
@@ -76,8 +92,9 @@ object LinuxRuntimeCircuitBreaker {
         val loaded =
             loadFromDisk()
 
-        cachedSnapshot =
+        publish(
             loaded
+        )
 
         return loaded
     }
@@ -89,46 +106,34 @@ object LinuxRuntimeCircuitBreaker {
             .tripped
     }
 
+    /*
+     * H5B:
+     * Pure transition policy now lives in
+     * LinuxRuntimeSafetyStateMachine.
+     */
     fun canStartRuntime():
             Boolean {
 
-        return when (
-            getSnapshot()
-                .mode
-        ) {
-
-            LinuxRuntimeSafetyMode.NORMAL,
-            LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
-                true
-
-            LinuxRuntimeSafetyMode.SAFE_MODE ->
-                false
-        }
+        return LinuxRuntimeSafetyStateMachine
+            .canStartRuntime(
+                getSnapshot()
+            )
     }
 
     fun isRecoveryArmed():
             Boolean {
 
-        return getSnapshot()
-            .mode ==
-                LinuxRuntimeSafetyMode.RECOVERY_ARMED
+        return LinuxRuntimeSafetyStateMachine
+            .isRecoveryArmed(
+                getSnapshot()
+            )
     }
 
     /*
      * Fail-closed runtime trapdoor.
      *
-     * This intentionally:
-     *
-     * - records the failure
-     * - stops PRoot
-     * - removes transient runtime files
-     * - preserves the Ubuntu rootfs
-     * - preserves user files
-     * - preserves package metadata
-     * - preserves the safety record
-     *
-     * It does NOT uninstall Atlas and does NOT erase
-     * forensic evidence.
+     * State creation is pure. Runtime shutdown,
+     * persistence, and transient cleanup stay here.
      */
     @Synchronized
     fun trip(
@@ -137,28 +142,26 @@ object LinuxRuntimeCircuitBreaker {
     ): LinuxRuntimeSafetySnapshot {
 
         val initialSnapshot =
-            LinuxRuntimeSafetySnapshot(
-                mode =
-                    LinuxRuntimeSafetyMode.SAFE_MODE,
+            LinuxRuntimeSafetyStateMachine
+                .trip(
+                    reason =
+                        reason,
 
-                reason =
-                    reason,
+                    message =
+                        message,
 
-                message =
-                    message.trim()
-                        .ifBlank {
-                            "Atlas Linux runtime entered safe mode."
-                        },
+                    timestampEpochMillis =
+                        System.currentTimeMillis()
+                )
 
-                trippedAtEpochMillis =
-                    System.currentTimeMillis(),
-
-                transientCleanupSucceeded =
-                    null
-            )
-
-        cachedSnapshot =
+        /*
+         * Publish/persist SAFE_MODE before touching the
+         * runtime. If cleanup itself fails, Atlas is
+         * already latched closed.
+         */
+        publish(
             initialSnapshot
+        )
 
         persist(
             initialSnapshot
@@ -166,10 +169,6 @@ object LinuxRuntimeCircuitBreaker {
 
         /*
          * Stop the guest before transient cleanup.
-         *
-         * ProotLinuxRuntimeBackend.stop() already attempts
-         * a normal termination and then force-stops the
-         * native runtime if it remains alive.
          */
         runCatching {
 
@@ -178,10 +177,9 @@ object LinuxRuntimeCircuitBreaker {
         }
 
         /*
-         * Keep Atlas' transient repository state aligned
-         * with the real process state after the trapdoor
-         * fires. Never claim STOPPED while PRoot is still
-         * alive.
+         * Keep repository state aligned with the real
+         * process state. Never claim STOPPED while PRoot
+         * is still alive.
          */
         if (
             !ProotLinuxRuntimeBackend
@@ -199,14 +197,18 @@ object LinuxRuntimeCircuitBreaker {
             cleanupTransientState()
 
         val finalSnapshot =
-            initialSnapshot
-                .copy(
-                    transientCleanupSucceeded =
+            LinuxRuntimeSafetyStateMachine
+                .withCleanupResult(
+                    snapshot =
+                        initialSnapshot,
+
+                    succeeded =
                         cleanupSucceeded
                 )
 
-        cachedSnapshot =
+        publish(
             finalSnapshot
+        )
 
         persist(
             finalSnapshot
@@ -216,13 +218,10 @@ object LinuxRuntimeCircuitBreaker {
     }
 
     /*
-     * Recovery is deliberate.
-     *
      * SAFE_MODE blocks normal PRoot startup.
-     * RECOVERY_ARMED allows the runtime to start, while
-     * LinuxGuestCommandExecutor restricts the guest to
-     * recovery-safe commands until package/runtime health
-     * is verified.
+     * RECOVERY_ARMED allows runtime startup while the
+     * guest executor restricts commands to recovery-safe
+     * operations.
      */
     @Synchronized
     fun armRecovery():
@@ -231,21 +230,23 @@ object LinuxRuntimeCircuitBreaker {
         val current =
             getSnapshot()
 
+        val armed =
+            LinuxRuntimeSafetyStateMachine
+                .armRecovery(
+                    current
+                )
+
         if (
-            !current.tripped
+            armed ==
+            current
         ) {
 
             return current
         }
 
-        val armed =
-            current.copy(
-                mode =
-                    LinuxRuntimeSafetyMode.RECOVERY_ARMED
-            )
-
-        cachedSnapshot =
+        publish(
             armed
+        )
 
         persist(
             armed
@@ -255,14 +256,18 @@ object LinuxRuntimeCircuitBreaker {
     }
 
     /*
-     * Called only after an explicit recovery command has
-     * proved that package/runtime health is clean.
+     * Called only after explicit recovery verification.
      */
     @Synchronized
     fun resetAfterVerifiedRecovery() {
 
-        cachedSnapshot =
-            LinuxRuntimeSafetySnapshot()
+        val normal =
+            LinuxRuntimeSafetyStateMachine
+                .reset()
+
+        publish(
+            normal
+        )
 
         stateFile()
             ?.let { file ->
@@ -272,6 +277,7 @@ object LinuxRuntimeCircuitBreaker {
                 ) {
 
                     runCatching {
+
                         file.delete()
                     }
                 }
@@ -281,8 +287,9 @@ object LinuxRuntimeCircuitBreaker {
     /*
      * Developer escape hatch.
      *
-     * This never repairs anything. It only clears the
-     * safety latch, so the terminal requires --force.
+     * This does not repair anything. It only clears the
+     * safety latch, so the terminal still requires
+     * --force.
      */
     @Synchronized
     fun forceReset() {
@@ -308,7 +315,9 @@ object LinuxRuntimeCircuitBreaker {
 
             add(
                 "Tripped : ${
-                    if (snapshot.tripped) {
+                    if (
+                        snapshot.tripped
+                    ) {
                         "YES"
                     } else {
                         "NO"
@@ -327,8 +336,9 @@ object LinuxRuntimeCircuitBreaker {
 
             snapshot
                 .message
-                ?.takeIf {
-                    it.isNotBlank()
+                ?.takeIf { message ->
+
+                    message.isNotBlank()
                 }
                 ?.let { message ->
 
@@ -352,7 +362,9 @@ object LinuxRuntimeCircuitBreaker {
 
                     add(
                         "Cleanup : ${
-                            if (cleaned) {
+                            if (
+                                cleaned
+                            ) {
                                 "CLEAN"
                             } else {
                                 "PARTIAL"
@@ -699,22 +711,26 @@ object LinuxRuntimeCircuitBreaker {
             /*
              * A corrupted safety record fails CLOSED.
              */
-            LinuxRuntimeSafetySnapshot(
-                mode =
-                    LinuxRuntimeSafetyMode.SAFE_MODE,
+            LinuxRuntimeSafetyStateMachine
+                .failClosed(
+                    message =
+                        "Atlas could not read the runtime safety record.",
 
-                reason =
-                    LinuxRuntimeSafetyReason.RUNTIME_INTEGRITY_FAILURE,
-
-                message =
-                    "Atlas could not read the runtime safety record.",
-
-                trippedAtEpochMillis =
-                    System.currentTimeMillis(),
-
-                transientCleanupSucceeded =
-                    null
-            )
+                    timestampEpochMillis =
+                        System.currentTimeMillis()
+                )
         }
+    }
+
+    private fun publish(
+        snapshot: LinuxRuntimeSafetySnapshot
+    ) {
+
+        cachedSnapshot =
+            snapshot
+
+        mutableSnapshotFlow
+            .value =
+            snapshot
     }
 }

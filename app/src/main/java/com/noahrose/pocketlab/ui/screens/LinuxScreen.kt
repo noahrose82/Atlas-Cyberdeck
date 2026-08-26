@@ -13,6 +13,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +24,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.noahrose.pocketlab.feature.linux.LinuxViewModel
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
+import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyMode
 
 @Composable
 fun LinuxScreen(
@@ -44,6 +47,31 @@ fun LinuxScreen(
 
     val runtimeBusy by
     linuxViewModel.runtimeBusy
+
+    /*
+     * H4E — Linux controls observe the same runtime
+     * safety state used by Terminal and the app shell.
+     */
+    val safetySnapshot by
+    LinuxRuntimeCircuitBreaker
+        .snapshotFlow
+        .collectAsState()
+
+    val safetyMode =
+        safetySnapshot
+            .mode
+
+    val safeModeActive =
+        safetyMode ==
+                LinuxRuntimeSafetyMode.SAFE_MODE
+
+    val recoveryModeActive =
+        safetyMode ==
+                LinuxRuntimeSafetyMode.RECOVERY_ARMED
+
+    val normalModeActive =
+        safetyMode ==
+                LinuxRuntimeSafetyMode.NORMAL
 
     val lifecycleOwner =
         LocalLifecycleOwner.current
@@ -215,6 +243,132 @@ fun LinuxScreen(
         }
 
         /*
+         * ------------------------------------------------
+         * H4E — RUNTIME SAFETY STATE
+         * ------------------------------------------------
+         *
+         * SAFE_MODE blocks runtime startup.
+         * RECOVERY_ARMED permits startup only for the
+         * controlled recovery command path.
+         */
+        if (
+            safetyMode !=
+            LinuxRuntimeSafetyMode.NORMAL
+        ) {
+
+            val safetyColor =
+                when (
+                    safetyMode
+                ) {
+
+                    LinuxRuntimeSafetyMode.SAFE_MODE ->
+                        Color(
+                            0xFFFFD600
+                        )
+
+                    LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                        Color(
+                            0xFFFFA000
+                        )
+
+                    LinuxRuntimeSafetyMode.NORMAL ->
+                        MaterialTheme
+                            .colorScheme
+                            .onSurfaceVariant
+                }
+
+            Text(
+                text =
+                    when (
+                        safetyMode
+                    ) {
+
+                        LinuxRuntimeSafetyMode.SAFE_MODE ->
+                            "Runtime Safety: SAFE MODE"
+
+                        LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                            "Runtime Safety: RECOVERY ARMED"
+
+                        LinuxRuntimeSafetyMode.NORMAL ->
+                            "Runtime Safety: NORMAL"
+                    },
+
+                color =
+                    safetyColor,
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleMedium
+            )
+
+            Text(
+                text =
+                    when (
+                        safetyMode
+                    ) {
+
+                        LinuxRuntimeSafetyMode.SAFE_MODE ->
+                            "Linux startup is blocked. Open Terminal and run 'safety recover' to begin controlled recovery."
+
+                        LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                            "Linux may start for controlled recovery. Guest commands remain restricted to approved diagnostics and repair operations."
+
+                        LinuxRuntimeSafetyMode.NORMAL ->
+                            ""
+                    },
+
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .widthIn(
+                            max = 500.dp
+                        ),
+
+                color =
+                    safetyColor,
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyMedium
+            )
+
+            safetySnapshot
+                .reason
+                ?.let { reason ->
+
+                    Text(
+                        text =
+                            "Safety reason: $reason",
+
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .widthIn(
+                                    max = 500.dp
+                                ),
+
+                        color =
+                            safetyColor,
+
+                        style =
+                            MaterialTheme
+                                .typography
+                                .bodySmall
+                    )
+                }
+
+            HorizontalDivider(
+                modifier =
+                    Modifier
+                        .widthIn(
+                            max = 500.dp
+                        )
+            )
+        }
+
+        /*
          * Linux installation state.
          */
         Text(
@@ -372,12 +526,40 @@ fun LinuxScreen(
 
             Text(
                 text =
-                    "Ubuntu is ready to use.",
+                    when (
+                        safetyMode
+                    ) {
+
+                        LinuxRuntimeSafetyMode.SAFE_MODE ->
+                            "Ubuntu is installed, but runtime startup is blocked."
+
+                        LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                            "Ubuntu is available for controlled recovery."
+
+                        LinuxRuntimeSafetyMode.NORMAL ->
+                            "Ubuntu is ready to use."
+                    },
 
                 color =
-                    Color(
-                        0xFF00C853
-                    ),
+                    when (
+                        safetyMode
+                    ) {
+
+                        LinuxRuntimeSafetyMode.SAFE_MODE ->
+                            Color(
+                                0xFFFFD600
+                            )
+
+                        LinuxRuntimeSafetyMode.RECOVERY_ARMED ->
+                            Color(
+                                0xFFFFA000
+                            )
+
+                        LinuxRuntimeSafetyMode.NORMAL ->
+                            Color(
+                                0xFF00C853
+                            )
+                    },
 
                 style =
                     MaterialTheme
@@ -576,14 +758,24 @@ fun LinuxScreen(
                             },
 
                             enabled =
-                                !runtimeBusy
+                                !runtimeBusy &&
+                                        !safeModeActive
                         ) {
 
                             Text(
-                                if (runtimeBusy) {
-                                    "Starting..."
-                                } else {
-                                    "Start Linux"
+                                when {
+
+                                    runtimeBusy ->
+                                        "Starting..."
+
+                                    safeModeActive ->
+                                        "Start Blocked — Safe Mode"
+
+                                    recoveryModeActive ->
+                                        "Start Recovery Linux"
+
+                                    else ->
+                                        "Start Linux"
                                 }
                             )
                         }
@@ -597,11 +789,16 @@ fun LinuxScreen(
                         },
 
                         enabled =
-                            !runtimeBusy
+                            !runtimeBusy &&
+                                    normalModeActive
                     ) {
 
                         Text(
-                            "Remove Linux"
+                            if (normalModeActive) {
+                                "Remove Linux"
+                            } else {
+                                "Remove Linux — Safety Locked"
+                            }
                         )
                     }
                 }
@@ -614,11 +811,18 @@ fun LinuxScreen(
 
                         linuxViewModel
                             .installLinux()
-                    }
+                    },
+
+                    enabled =
+                        normalModeActive
                 ) {
 
                     Text(
-                        "Install Ubuntu"
+                        if (normalModeActive) {
+                            "Install Ubuntu"
+                        } else {
+                            "Install Ubuntu — Safety Locked"
+                        }
                     )
                 }
             }
