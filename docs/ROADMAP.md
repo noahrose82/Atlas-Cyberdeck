@@ -5,7 +5,7 @@
 ### **Your Cyberdeck. Anywhere.**
 
 **Current release:** `v0.13.0-alpha`  
-**Current public phase:** Product Readiness  
+**Current public phase:** Product Readiness + Kickstarter Pre-Launch  
 **Engineering source-of-truth endpoint:** `F3P-H5B`
 
 </div>
@@ -72,7 +72,7 @@ flowchart LR
 | Runtime Safety | ✅ |
 | Regression Hardening | ✅ |
 | Documentation & Product Readiness | 🟢 |
-| Pre-Launch Preparation | 🟡 |
+| Pre-Launch & Kickstarter Preparation | 🟢 |
 | Atlas Cyberdeck 1.0 | 🟡 |
 
 Atlas is currently in the **v0.13.0-alpha** development line.
@@ -367,30 +367,61 @@ A visitor should be able to understand within seconds that Atlas is:
 
 ## Phase 8 — Pre-Launch & Kickstarter Preparation
 
-**Status:** 🟡 PLANNED
+**Status:** 🟢 ACTIVE
 
-Pre-launch preparation begins before Atlas 1.0 and remains separate from the actual commercial launch.
+Atlas Cyberdeck has entered active crowdfunding pre-launch preparation.
 
-### Planned work
+The Kickstarter campaign has been configured and submitted for project review. Pre-launch work now focuses on preparing the public project ecosystem, building an initial audience, and ensuring the campaign can launch deliberately rather than simply launching the moment approval is received.
 
-- Atlas Labs landing page
+### Completed
+
 - product positioning
-- mailing-list capture
-- launch screenshots
-- professional terminal demos
-- 30–60 second real-device demo video
 - campaign story
 - campaign budget
+- funding goal
 - reward structure
 - founder story
 - FAQ
 - risks and challenges section
 - campaign visual assets
+- creator profile
+- payment and identity verification
+- banking configuration
+- Kickstarter project submission
+- Google Analytics account creation
+- GitHub public repository preparation
+- GitHub Discussions community setup
+
+### In progress
+
+- Kickstarter project review
+- Atlas Labs public presence
+- repository and documentation synchronization
 - pre-launch audience building
+- Facebook launch preparation
+- LinkedIn launch preparation
+- Reddit community research
+- GitHub / GitLab public visibility
+- Google Analytics campaign data stream
+- launch communications planning
+
+### Remaining before launch
+
+- Kickstarter approval
+- permanent Kickstarter project URL
+- Google Analytics connection
+- pre-launch page activation
+- public pre-launch announcement
+- follower acquisition
+- final campaign preview
 - launch-day communications
-- Kickstarter feasibility validation
+- launch readiness decision
 
 ### Campaign principle
+
+> **Approval is not the launch.**
+
+Atlas Cyberdeck will launch only when the campaign, public documentation, analytics, communications, and initial audience are ready.
 
 A crowdfunding campaign should promise only clearly defined Atlas 1.0 deliverables that can be realistically completed and supported.
 
