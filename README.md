@@ -35,6 +35,19 @@ Atlas is being built for developers, cybersecurity students and professionals, s
 
 ---
 
+## Project Status
+
+Atlas Cyberdeck is currently in active alpha development.
+
+The project already runs a persistent Ubuntu ARM64 userspace on Android through PRoot without requiring device root access. Core runtime control, package management, diagnostics, Safe Mode, controlled recovery, and the Atlas terminal are operational and under active testing.
+
+Atlas Cyberdeck is currently under Kickstarter review. Crowdfunding, if approved and successfully funded, will support continued development toward a polished public release, expanded platform capabilities, broader device validation, documentation, and the path toward Atlas Cyberdeck 1.0.
+
+> **This is working software, not a concept render.**  
+> The screenshots and terminal output in this repository are from the current Atlas Cyberdeck development build.
+
+---
+
 ## Atlas at a Glance
 
 | 🐧 **Ubuntu Runtime** | 💻 **Atlas Platform** | 🛡️ **Runtime Safety** |
@@ -562,7 +575,7 @@ Each phase is kept small enough to validate before the next system layer is adde
 
 # Roadmap
 
-Current future directions include:
+Atlas Cyberdeck development is organized into engineering phases. Current planned directions include:
 
 - expanded Linux runtime capabilities;
 - SSH client;
