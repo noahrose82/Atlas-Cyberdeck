@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "PocketLab"
+rootProject.name = "Atlas-Cyberdeck"
 include(":app")

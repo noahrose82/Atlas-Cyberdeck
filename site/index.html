@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050706">
+  <meta name="description" content="Atlas Cyberdeck — a real Ubuntu Linux workspace on Android without requiring root. Your Cyberdeck. Anywhere.">
+  <meta property="og:title" content="Atlas Cyberdeck — Your Cyberdeck. Anywhere.">
+  <meta property="og:description" content="A real Linux workstation in your pocket. No Android root required.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/images/atlas-cyberdeck-social-card.png">
+  <title>Atlas Cyberdeck — Your Cyberdeck. Anywhere.</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="config.js"></script>
+  <script defer src="app.js"></script>
+</head>
+
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" id="top">
+    <div class="nav shell">
+      <a class="brand" href="#top" aria-label="Atlas Cyberdeck home">
+        <span class="brand-mark" aria-hidden="true">A</span>
+        <span>
+          <strong>ATLAS CYBERDECK</strong>
+          <small>ATLAS LABS</small>
+        </span>
+      </a>
+
+      <nav class="nav-links" aria-label="Primary navigation">
+        <a href="#proof">Proof</a>
+        <a href="#safety">Safety</a>
+        <a href="#one-zero">1.0</a>
+        <a href="#founder">Founder</a>
+      </nav>
+
+      <a class="button button-small button-outline" href="#launch-list">Join Launch List</a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero section">
+      <div class="hero-grid shell">
+        <div class="hero-copy reveal">
+          <div class="eyebrow">
+            <span class="live-dot" aria-hidden="true"></span>
+            v0.13.0-alpha · PRE-LAUNCH
+          </div>
+
+          <p class="kicker">YOUR CYBERDECK. ANYWHERE.</p>
+          <h1>A real Linux workstation in your pocket.</h1>
+          <p class="hero-lede">
+            Atlas Cyberdeck is a native Android workspace with an independent Atlas shell
+            and a real Ubuntu ARM64 userspace — <strong>without requiring Android root.</strong>
+          </p>
+
+          <div class="hero-actions">
+            <a class="button button-primary" href="#launch-list">Join the Launch List</a>
+            <a class="button button-ghost" href="#proof">See It Running <span aria-hidden="true">↓</span></a>
+          </div>
+
+          <div class="proof-chips" aria-label="Current capabilities">
+            <span>Ubuntu 24.04.4 LTS</span>
+            <span>ARM64 / AArch64</span>
+            <span>APT / DPKG</span>
+            <span>Python 3.12.3</span>
+            <span>No Android Root</span>
+          </div>
+        </div>
+
+        <div class="hero-media reveal">
+          <img
+            src="assets/images/atlas-cyberdeck-hero.png"
+            alt="Atlas Cyberdeck dashboard and Ubuntu shell shown on Android devices"
+            width="1600"
+            height="900"
+          >
+          <div class="signal-card">
+            <span>RUNTIME</span>
+            <strong>RUNNING</strong>
+            <small>Ubuntu ARM64 · real device</small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="trust-strip" aria-label="Product proof">
+      <div class="shell trust-grid">
+        <div><strong>REAL UBUNTU</strong><span>24.04.4 LTS</span></div>
+        <div><strong>ROOTLESS</strong><span>No Android root</span></div>
+        <div><strong>PERSISTENT</strong><span>Ubuntu RootFS</span></div>
+        <div><strong>FAIL-CLOSED</strong><span>Safe + Recovery modes</span></div>
+      </div>
+    </section>
+
+    <section class="section section-dark" id="proof">
+      <div class="shell">
+        <div class="section-heading reveal">
+          <p class="kicker">THIS IS RUNNING TODAY</p>
+          <h2>Not a concept render.</h2>
+          <p>
+            Atlas already provisions and runs a real Ubuntu ARM64 environment on physical Android hardware. The product proof comes first.
+          </p>
+        </div>
+
+        <div class="device-grid">
+          <figure class="device-card reveal">
+            <img
+              src="assets/screenshots/dashboard-device.png"
+              alt="Atlas Cyberdeck dashboard showing Linux runtime running on Android"
+              loading="lazy"
+            >
+            <figcaption>
+              <span>ANDROID DASHBOARD</span>
+              <strong>Linux runtime: RUNNING</strong>
+              <p>Live package count, RootFS storage, architecture, terminal status, and runtime state.</p>
+            </figcaption>
+          </figure>
+
+          <figure class="device-card reveal">
+            <img
+              src="assets/screenshots/terminal-ubuntu-device.png"
+              alt="Ubuntu 24.04.4 LTS ARM64 terminal running inside Atlas Cyberdeck on an Android phone"
+              loading="lazy"
+            >
+            <figcaption>
+              <span>REAL UBUNTU SHELL</span>
+              <strong>Ubuntu 24.04.4 LTS · AArch64</strong>
+              <p>Persistent Linux userspace with Python and Debian package tooling.</p>
+            </figcaption>
+          </figure>
+        </div>
+
+        <div class="terminal-proof reveal" aria-label="Example Ubuntu commands">
+          <div class="terminal-bar">
+            <span></span><span></span><span></span>
+            <code>root@atlas:~</code>
+          </div>
+          <pre><code><span class="prompt">root@atlas:~#</span> cat /etc/os-release | grep PRETTY_NAME
+PRETTY_NAME="Ubuntu 24.04.4 LTS"
+
+<span class="prompt">root@atlas:~#</span> uname -m
+aarch64
+
+<span class="prompt">root@atlas:~#</span> python3 --version
+Python 3.12.3</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="architecture">
+      <div class="shell">
+        <div class="section-heading centered reveal">
+          <p class="kicker">MORE THAN A TERMINAL</p>
+          <h2>One app. Two shells. Real Linux.</h2>
+          <p>
+            Atlas controls the mobile workspace. Ubuntu provides the Linux userspace.
+            They are distinct by design.
+          </p>
+        </div>
+
+        <div class="feature-layout">
+          <article class="feature-card reveal">
+            <div class="feature-number">01</div>
+            <p class="kicker">ATLAS SHELL</p>
+            <h3>The application environment.</h3>
+            <p>Commands, diagnostics, scripts, VFS workflows, lifecycle controls, and safety state live in Atlas.</p>
+            <ul class="check-list">
+              <li>Independent command environment</li>
+              <li>Persistent virtual filesystem</li>
+              <li>.ash scripting</li>
+              <li>Runtime diagnostics</li>
+              <li>Linux lifecycle controls</li>
+            </ul>
+          </article>
+
+          <article class="feature-card feature-card-accent reveal">
+            <div class="feature-number">02</div>
+            <p class="kicker">UBUNTU SHELL</p>
+            <h3>The Linux userspace.</h3>
+            <p>Atlas hands you into a persistent Ubuntu ARM64 environment when you need real Linux tools.</p>
+            <ul class="check-list">
+              <li>Ubuntu 24.04.4 LTS</li>
+              <li>APT / APT-GET / DPKG</li>
+              <li>Python</li>
+              <li>Android DNS synchronization</li>
+              <li>Persistent guest files</li>
+            </ul>
+          </article>
+        </div>
+
+        <figure class="wide-showcase reveal">
+          <img src="assets/images/runtime-showcase.png" alt="Atlas shell, Ubuntu shell, and Linux Manager product showcase" loading="lazy">
+        </figure>
+      </div>
+    </section>
+
+    <section class="section section-safety" id="safety">
+      <div class="shell">
+        <div class="section-heading reveal">
+          <p class="kicker kicker-warn">BUILT TO FAIL SAFELY</p>
+          <h2>Failure should be visible.</h2>
+          <p>
+            Atlas uses a fail-closed runtime circuit breaker. Critical failures can block
+            normal Linux startup while preserving the workspace and guiding the user through controlled recovery.
+          </p>
+        </div>
+
+        <figure class="wide-showcase safety-showcase reveal">
+          <img src="assets/images/safety-recovery-showcase.png" alt="Atlas Cyberdeck Safe Mode and Controlled Recovery screens" loading="lazy">
+        </figure>
+
+        <div class="state-flow reveal" aria-label="Safety state flow">
+          <div class="state state-normal"><span>01</span><strong>NORMAL</strong><small>Runtime allowed</small></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="state state-safe"><span>02</span><strong>SAFE MODE</strong><small>Fail closed</small></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="state state-recovery"><span>03</span><strong>RECOVERY</strong><small>Restricted repair</small></div>
+          <div class="flow-arrow" aria-hidden="true">→</div>
+          <div class="state state-normal"><span>04</span><strong>VERIFIED</strong><small>Return to normal</small></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="one-zero">
+      <div class="shell">
+        <div class="section-heading centered reveal">
+          <p class="kicker">ATLAS CYBERDECK 1.0</p>
+          <h2>The Kickstarter promise stays focused.</h2>
+          <p>
+            The campaign is about taking the proven alpha foundation to a polished public release —
+            not turning every future roadmap idea into a launch obligation.
+          </p>
+        </div>
+
+        <div class="scope-grid">
+          <article class="scope-card scope-in reveal">
+            <span class="scope-label">1.0 DELIVERY</span>
+            <h3>What the campaign funds.</h3>
+            <ul class="check-list">
+              <li>Broader Android compatibility validation</li>
+              <li>Terminal UX refinement</li>
+              <li>Performance + battery optimization</li>
+              <li>Accessibility + onboarding</li>
+              <li>Expanded regression coverage</li>
+              <li>Privacy + security review</li>
+              <li>Public documentation</li>
+              <li>Release signing + distribution readiness</li>
+            </ul>
+          </article>
+
+          <article class="scope-card scope-out reveal">
+            <span class="scope-label">FUTURE ROADMAP</span>
+            <h3>What 1.0 does not promise.</h3>
+            <ul class="minus-list">
+              <li>Every Android device</li>
+              <li>Every Linux package</li>
+              <li>Full desktop-Linux equivalence</li>
+              <li>Dedicated Atlas hardware</li>
+              <li>Full SSH / remote-admin suite</li>
+              <li>Full Git workflow UI</li>
+              <li>Multi-device synchronization</li>
+              <li>Burner Mode</li>
+            </ul>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section founder-section" id="founder">
+      <div class="shell founder-grid">
+        <div class="founder-copy reveal">
+          <p class="kicker">ATLAS LABS</p>
+          <h2>Built independently. Engineered seriously.</h2>
+          <p>
+            Atlas Cyberdeck is built independently by <strong>Noah Rose</strong> under Atlas Labs.
+            The project is driven by a simple idea: our mobile devices can be more than closed
+            consumption surfaces when we understand and build the systems ourselves.
+          </p>
+
+          <blockquote>
+            “Maybe not breaking free from the Matrix—but we are writing our own code instead
+            of living inside someone else’s. That is a pretty good way to spend our time.”
+          </blockquote>
+
+          <p class="founder-signoff">— Atlas Labs</p>
+        </div>
+
+        <div class="journey-card reveal">
+          <img src="assets/images/product-journey.png" alt="Atlas Cyberdeck product journey from Boot to Recovery" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <section class="section launch-section" id="launch-list">
+      <div class="shell">
+
+        <div class="launch-panel reveal">
+          <div class="launch-copy">
+            <p class="kicker">PRE-LAUNCH</p>
+            <h2>Be there when Atlas launches.</h2>
+            <p>
+              Join the launch list for real-device demos, engineering updates, and the Kickstarter launch announcement.
+            </p>
+          </div>
+
+          <form id="launch-form" class="launch-form" novalidate>
+            <label for="email">Email address</label>
+            <div class="form-row">
+              <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+              <button class="button button-primary" type="submit">Join the Launch List</button>
+            </div>
+            <p class="form-note">
+              Join the Atlas pre-launch list for development updates and the Kickstarter launch announcement.
+            </p>
+            <div id="form-status" class="form-status" aria-live="polite"></div>
+          </form>
+
+          <div class="kickstarter-row">
+            <span>Prefer Kickstarter?</span>
+            <a id="kickstarter-link" class="button button-outline is-disabled" href="#" aria-disabled="true">Pre-Launch Page Coming Soon</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-grid">
+      <div>
+        <strong>ATLAS CYBERDECK</strong>
+        <p>Your Cyberdeck. Anywhere.</p>
+      </div>
+      <div class="footer-meta">
+        <span>Current build: v0.13.0-alpha</span>
+        <span>Built independently by Noah Rose under Atlas Labs.</span>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
