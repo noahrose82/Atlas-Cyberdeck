@@ -2,30 +2,43 @@ package com.noahrose.pocketlab.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.noahrose.pocketlab.feature.linux.LinuxViewModel
+import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityEntry
+import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityLevel
 import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
 import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyMode
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun LinuxScreen(
@@ -47,6 +60,9 @@ fun LinuxScreen(
 
     val runtimeBusy by
     linuxViewModel.runtimeBusy
+
+    val runtimeActivity by
+    linuxViewModel.runtimeActivity
 
     /*
      * H4E — Linux controls observe the same runtime
@@ -122,8 +138,12 @@ fun LinuxScreen(
             "Cleaning up..."
         )
 
+    val screenScrollState =
+        rememberScrollState()
+
     Button(
-        onClick = onBack
+        onClick =
+            onBack
     ) {
 
         Text(
@@ -135,13 +155,16 @@ fun LinuxScreen(
         modifier =
             Modifier
                 .fillMaxSize()
-                .padding(24.dp),
+                .verticalScroll(
+                    screenScrollState
+                )
+                .padding(
+                    24.dp
+                ),
 
         verticalArrangement =
             Arrangement.spacedBy(
-                space = 16.dp,
-                alignment =
-                    Alignment.CenterVertically
+                16.dp
             ),
 
         horizontalAlignment =
@@ -171,9 +194,13 @@ fun LinuxScreen(
         )
 
         /*
-         * Feature-gated device state.
+         * ------------------------------------------------
+         * FEATURE GATE
+         * ------------------------------------------------
          */
-        if (!linuxAvailable) {
+        if (
+            !linuxAvailable
+        ) {
 
             Text(
                 text =
@@ -194,7 +221,8 @@ fun LinuxScreen(
                 modifier =
                     Modifier
                         .widthIn(
-                            max = 500.dp
+                            max =
+                                500.dp
                         )
             )
 
@@ -246,10 +274,6 @@ fun LinuxScreen(
          * ------------------------------------------------
          * H4E — RUNTIME SAFETY STATE
          * ------------------------------------------------
-         *
-         * SAFE_MODE blocks runtime startup.
-         * RECOVERY_ARMED permits startup only for the
-         * controlled recovery command path.
          */
         if (
             safetyMode !=
@@ -322,7 +346,8 @@ fun LinuxScreen(
                     Modifier
                         .fillMaxWidth()
                         .widthIn(
-                            max = 500.dp
+                            max =
+                                500.dp
                         ),
 
                 color =
@@ -346,7 +371,8 @@ fun LinuxScreen(
                             Modifier
                                 .fillMaxWidth()
                                 .widthIn(
-                                    max = 500.dp
+                                    max =
+                                        500.dp
                                 ),
 
                         color =
@@ -363,13 +389,16 @@ fun LinuxScreen(
                 modifier =
                     Modifier
                         .widthIn(
-                            max = 500.dp
+                            max =
+                                500.dp
                         )
             )
         }
 
         /*
-         * Linux installation state.
+         * ------------------------------------------------
+         * INSTALLATION STATE
+         * ------------------------------------------------
          */
         Text(
             text =
@@ -414,21 +443,27 @@ fun LinuxScreen(
             modifier =
                 Modifier
                     .widthIn(
-                        max = 500.dp
+                        max =
+                            500.dp
                     )
         )
 
         /*
-         * Installation progress.
+         * ------------------------------------------------
+         * INSTALLATION PROGRESS
+         * ------------------------------------------------
          */
-        if (installation.isInstalling) {
+        if (
+            installation.isInstalling
+        ) {
 
             Column(
                 modifier =
                     Modifier
                         .fillMaxWidth()
                         .widthIn(
-                            max = 500.dp
+                            max =
+                                500.dp
                         ),
 
                 verticalArrangement =
@@ -460,6 +495,7 @@ fun LinuxScreen(
 
                 LinearProgressIndicator(
                     progress = {
+
                         installation
                             .installationProgress
                     },
@@ -517,7 +553,9 @@ fun LinuxScreen(
         }
 
         /*
-         * Installed Linux runtime state.
+         * ------------------------------------------------
+         * INSTALLED RUNTIME STATE
+         * ------------------------------------------------
          */
         if (
             installation.installed &&
@@ -613,7 +651,9 @@ fun LinuxScreen(
         }
 
         /*
-         * Runtime status/error feedback.
+         * ------------------------------------------------
+         * RUNTIME SUMMARY MESSAGE
+         * ------------------------------------------------
          */
         if (
             !runtimeMessage
@@ -624,17 +664,20 @@ fun LinuxScreen(
                 runtimeMessage
                     ?.contains(
                         "failed",
-                        ignoreCase = true
+                        ignoreCase =
+                            true
                     ) == true ||
                         runtimeMessage
                             ?.contains(
                                 "could not",
-                                ignoreCase = true
+                                ignoreCase =
+                                    true
                             ) == true ||
                         runtimeMessage
                             ?.contains(
                                 "exited",
-                                ignoreCase = true
+                                ignoreCase =
+                                    true
                             ) == true
 
             Text(
@@ -646,11 +689,14 @@ fun LinuxScreen(
                     Modifier
                         .fillMaxWidth()
                         .widthIn(
-                            max = 500.dp
+                            max =
+                                500.dp
                         ),
 
                 color =
-                    if (isError) {
+                    if (
+                        isError
+                    ) {
 
                         MaterialTheme
                             .colorScheme
@@ -671,14 +717,48 @@ fun LinuxScreen(
         }
 
         /*
-         * Installation statistics.
+         * ------------------------------------------------
+         * LIVE RUNTIME ACTIVITY
+         * ------------------------------------------------
+         *
+         * Everything shown here comes from the runtime
+         * controller/backend activity reporter.
+         *
+         * There are no artificial delays or fake progress
+         * events in this panel.
+         */
+        if (
+            installation.installed &&
+            !installation.isInstalling
+        ) {
+
+            RuntimeActivityPanel(
+                entries =
+                    runtimeActivity,
+
+                runtimeBusy =
+                    runtimeBusy,
+
+                onClear = {
+
+                    linuxViewModel
+                        .clearRuntimeActivity()
+                }
+            )
+        }
+
+        /*
+         * ------------------------------------------------
+         * INSTALLATION STATISTICS
+         * ------------------------------------------------
          */
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
                     .widthIn(
-                        max = 500.dp
+                        max =
+                            500.dp
                     ),
 
             verticalArrangement =
@@ -697,7 +777,9 @@ fun LinuxScreen(
         }
 
         /*
-         * Linux controls.
+         * ------------------------------------------------
+         * LINUX CONTROLS
+         * ------------------------------------------------
          */
         when {
 
@@ -705,7 +787,8 @@ fun LinuxScreen(
 
                 Button(
                     onClick = {},
-                    enabled = false
+                    enabled =
+                        false
                 ) {
 
                     Text(
@@ -726,7 +809,9 @@ fun LinuxScreen(
                         )
                 ) {
 
-                    if (installation.running) {
+                    if (
+                        installation.running
+                    ) {
 
                         Button(
                             onClick = {
@@ -740,9 +825,14 @@ fun LinuxScreen(
                         ) {
 
                             Text(
-                                if (runtimeBusy) {
+                                if (
+                                    runtimeBusy
+                                ) {
+
                                     "Stopping..."
+
                                 } else {
+
                                     "Stop Linux"
                                 }
                             )
@@ -794,9 +884,14 @@ fun LinuxScreen(
                     ) {
 
                         Text(
-                            if (normalModeActive) {
+                            if (
+                                normalModeActive
+                            ) {
+
                                 "Remove Linux"
+
                             } else {
+
                                 "Remove Linux — Safety Locked"
                             }
                         )
@@ -818,9 +913,14 @@ fun LinuxScreen(
                 ) {
 
                     Text(
-                        if (normalModeActive) {
+                        if (
+                            normalModeActive
+                        ) {
+
                             "Install Ubuntu"
+
                         } else {
+
                             "Install Ubuntu — Safety Locked"
                         }
                     )
@@ -830,6 +930,294 @@ fun LinuxScreen(
     }
 }
 
+/*
+ * ========================================================
+ * RUNTIME ACTIVITY PANEL
+ * ========================================================
+ */
+@Composable
+private fun RuntimeActivityPanel(
+    entries: List<LinuxRuntimeActivityEntry>,
+    runtimeBusy: Boolean,
+    onClear: () -> Unit
+) {
+
+    val activityScrollState =
+        rememberScrollState()
+
+    /*
+     * Follow new runtime events automatically so the most
+     * recent operation remains visible during startup.
+     */
+    LaunchedEffect(
+        entries.size
+    ) {
+
+        if (
+            entries.isNotEmpty()
+        ) {
+
+            activityScrollState
+                .scrollTo(
+                    Int.MAX_VALUE
+                )
+        }
+    }
+
+    Surface(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .widthIn(
+                    max =
+                        500.dp
+                ),
+
+        shape =
+            MaterialTheme
+                .shapes
+                .medium,
+
+        tonalElevation =
+            2.dp
+    ) {
+
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        14.dp
+                    ),
+
+            verticalArrangement =
+                Arrangement.spacedBy(
+                    10.dp
+                )
+        ) {
+
+            Row(
+                modifier =
+                    Modifier
+                        .fillMaxWidth(),
+
+                horizontalArrangement =
+                    Arrangement.SpaceBetween,
+
+                verticalAlignment =
+                    Alignment.CenterVertically
+            ) {
+
+                Column(
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            2.dp
+                        )
+                ) {
+
+                    Text(
+                        text =
+                            "Runtime Activity",
+
+                        style =
+                            MaterialTheme
+                                .typography
+                                .titleMedium
+                    )
+
+                    Text(
+                        text =
+                            when {
+
+                                runtimeBusy ->
+                                    "LIVE"
+
+                                entries.isEmpty() ->
+                                    "Waiting"
+
+                                else ->
+                                    "${entries.size} events"
+                            },
+
+                        color =
+                            when {
+
+                                runtimeBusy ->
+                                    Color(
+                                        0xFFFFC107
+                                    )
+
+                                entries.isNotEmpty() ->
+                                    Color(
+                                        0xFF00C853
+                                    )
+
+                                else ->
+                                    MaterialTheme
+                                        .colorScheme
+                                        .onSurfaceVariant
+                            },
+
+                        style =
+                            MaterialTheme
+                                .typography
+                                .labelMedium
+                    )
+                }
+
+                OutlinedButton(
+                    onClick =
+                        onClear,
+
+                    enabled =
+                        entries.isNotEmpty()
+                ) {
+
+                    Text(
+                        "Clear"
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            if (
+                entries.isEmpty()
+            ) {
+
+                Text(
+                    text =
+                        "No runtime activity yet. Start Linux to view the live startup sequence.",
+
+                    color =
+                        MaterialTheme
+                            .colorScheme
+                            .onSurfaceVariant,
+
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodyMedium
+                )
+
+            } else {
+
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(
+                                min =
+                                    120.dp,
+
+                                max =
+                                    240.dp
+                            )
+                            .verticalScroll(
+                                activityScrollState
+                            ),
+
+                    verticalArrangement =
+                        Arrangement.spacedBy(
+                            6.dp
+                        )
+                ) {
+
+                    entries
+                        .forEach { entry ->
+
+                            RuntimeActivityRow(
+                                entry =
+                                    entry
+                            )
+                        }
+                }
+            }
+        }
+    }
+}
+
+/*
+ * ========================================================
+ * RUNTIME ACTIVITY ROW
+ * ========================================================
+ */
+@Composable
+private fun RuntimeActivityRow(
+    entry: LinuxRuntimeActivityEntry
+) {
+
+    val symbol =
+        when (
+            entry.level
+        ) {
+
+            LinuxRuntimeActivityLevel.INFO ->
+                "•"
+
+            LinuxRuntimeActivityLevel.SUCCESS ->
+                "✓"
+
+            LinuxRuntimeActivityLevel.WARNING ->
+                "!"
+
+            LinuxRuntimeActivityLevel.ERROR ->
+                "✕"
+        }
+
+    val color =
+        when (
+            entry.level
+        ) {
+
+            LinuxRuntimeActivityLevel.INFO ->
+                MaterialTheme
+                    .colorScheme
+                    .onSurfaceVariant
+
+            LinuxRuntimeActivityLevel.SUCCESS ->
+                Color(
+                    0xFF00C853
+                )
+
+            LinuxRuntimeActivityLevel.WARNING ->
+                Color(
+                    0xFFFFC107
+                )
+
+            LinuxRuntimeActivityLevel.ERROR ->
+                MaterialTheme
+                    .colorScheme
+                    .error
+        }
+
+    Text(
+        text =
+            "${formatRuntimeTimestamp(entry.timestampEpochMillis)}  " +
+                    "$symbol  ${entry.message}",
+
+        modifier =
+            Modifier
+                .fillMaxWidth(),
+
+        color =
+            color,
+
+        fontFamily =
+            FontFamily.Monospace,
+
+        style =
+            MaterialTheme
+                .typography
+                .bodySmall
+    )
+}
+
+/*
+ * ========================================================
+ * INSTALLATION STEP
+ * ========================================================
+ */
 @Composable
 private fun InstallationStepRow(
     step: String,
@@ -838,7 +1226,9 @@ private fun InstallationStepRow(
 ) {
 
     val stepProgress =
-        when (step) {
+        when (
+            step
+        ) {
 
             "Preparing installation..." ->
                 0.20f
@@ -906,5 +1296,24 @@ private fun InstallationStepRow(
             MaterialTheme
                 .typography
                 .bodyMedium
+    )
+}
+
+/*
+ * ========================================================
+ * TIMESTAMP
+ * ========================================================
+ */
+private fun formatRuntimeTimestamp(
+    timestampEpochMillis: Long
+): String {
+
+    return SimpleDateFormat(
+        "HH:mm:ss",
+        Locale.getDefault()
+    ).format(
+        Date(
+            timestampEpochMillis
+        )
     )
 }

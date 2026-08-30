@@ -11,10 +11,13 @@ import com.noahrose.pocketlab.feature.linux.rootfs.provision.LinuxRootfsProvisio
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeControlResult
 import com.noahrose.pocketlab.feature.linux.runtime.LinuxRuntimeController
 import com.noahrose.pocketlab.feature.linux.runtime.ProotLinuxRuntimeBackend
+import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityEntry
+import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityReporter
 import com.noahrose.pocketlab.feature.linux.runtime.metrics.LinuxInstallationMetricsReader
 import com.noahrose.pocketlab.feature.system.bootstrap.DeviceBootstrapManager
 import com.noahrose.pocketlab.feature.system.capability.AtlasFeature
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -52,10 +55,7 @@ class LinuxViewModel : ViewModel() {
         _blockedReason
 
     /*
-     * Visible runtime feedback.
-     *
-     * This prevents Start Linux failures from
-     * disappearing silently.
+     * Short user-facing runtime summary.
      */
     private val _runtimeMessage =
         mutableStateOf<String?>(
@@ -66,11 +66,7 @@ class LinuxViewModel : ViewModel() {
         _runtimeMessage
 
     /*
-     * PRoot startup and guest verification involve
-     * native process work and blocking stream I/O.
-     *
-     * They must never execute on the Compose/UI
-     * thread.
+     * Prevent overlapping start/stop/remove operations.
      */
     private val _runtimeBusy =
         mutableStateOf(
@@ -81,15 +77,46 @@ class LinuxViewModel : ViewModel() {
         _runtimeBusy
 
     /*
-     * RootFS storage measurement walks the Ubuntu
-     * filesystem and must remain off the UI thread.
+     * Detailed runtime activity history.
      *
-     * This guard prevents overlapping scans when the
-     * Linux screen resumes while another refresh is
-     * already running.
+     * These entries originate from the real controller
+     * and PRoot backend rather than simulated UI progress.
+     */
+    private val _runtimeActivity =
+        mutableStateOf<List<LinuxRuntimeActivityEntry>>(
+            emptyList()
+        )
+
+    val runtimeActivity:
+            State<List<LinuxRuntimeActivityEntry>> =
+        _runtimeActivity
+
+    /*
+     * RootFS metrics require filesystem traversal.
      */
     private var metricsRefreshInProgress =
         false
+
+    init {
+
+        /*
+         * Observe the runtime activity reporter for the
+         * lifetime of this ViewModel.
+         *
+         * Compose receives a normal State<List<...>>,
+         * keeping LinuxScreen simple.
+         */
+        viewModelScope.launch {
+
+            LinuxRuntimeActivityReporter
+                .entries
+                .collect { entries ->
+
+                    _runtimeActivity.value =
+                        entries
+                }
+        }
+    }
 
     fun installLinux() {
 
@@ -98,7 +125,9 @@ class LinuxViewModel : ViewModel() {
         _runtimeMessage.value =
             null
 
-        if (!_linuxAvailable.value) {
+        if (
+            !_linuxAvailable.value
+        ) {
 
             val current =
                 LinuxRepository
@@ -146,13 +175,6 @@ class LinuxViewModel : ViewModel() {
                     LinuxRootfsProvisionManager
                         .provision { progress, step ->
 
-                            /*
-                             * Repository state updates eventually
-                             * reach Compose through refreshes.
-                             *
-                             * Provisioning itself remains off the
-                             * UI thread.
-                             */
                             updateInstallation(
                                 progress =
                                     progress,
@@ -163,7 +185,9 @@ class LinuxViewModel : ViewModel() {
                         }
                 }
 
-            when (result) {
+            when (
+                result
+            ) {
 
                 LinuxRootfsProvisionResult.Success -> {
 
@@ -179,6 +203,7 @@ class LinuxViewModel : ViewModel() {
                         .completeInstallation()
 
                     refreshInstallation()
+
                     refreshInstallationMetrics()
                 }
 
@@ -195,13 +220,17 @@ class LinuxViewModel : ViewModel() {
 
     fun startLinux() {
 
-        if (_runtimeBusy.value) {
+        if (
+            _runtimeBusy.value
+        ) {
             return
         }
 
         refreshFeatureGate()
 
-        if (!_linuxAvailable.value) {
+        if (
+            !_linuxAvailable.value
+        ) {
 
             _runtimeMessage.value =
                 _blockedReason.value
@@ -218,54 +247,80 @@ class LinuxViewModel : ViewModel() {
 
         viewModelScope.launch {
 
-            val result =
-                withContext(
-                    Dispatchers.IO
-                ) {
+            try {
 
-                    LinuxRuntimeController
-                        .start()
-                }
+                val result =
+                    withContext(
+                        Dispatchers.IO
+                    ) {
 
-            refreshInstallation()
-            refreshInstallationMetrics()
+                        LinuxRuntimeController
+                            .start()
+                    }
 
-            _runtimeMessage.value =
-                when (result) {
+                refreshInstallation()
 
-                    LinuxRuntimeControlResult.STARTED ->
-                        "Ubuntu runtime started successfully."
+                refreshInstallationMetrics()
 
-                    LinuxRuntimeControlResult.ALREADY_RUNNING ->
-                        "Ubuntu runtime is already running."
+                _runtimeMessage.value =
+                    when (
+                        result
+                    ) {
 
-                    LinuxRuntimeControlResult.NOT_INSTALLED ->
-                        "Ubuntu is not installed."
+                        LinuxRuntimeControlResult.STARTED ->
+                            "Ubuntu runtime started successfully."
 
-                    LinuxRuntimeControlResult.INSTALLATION_IN_PROGRESS ->
-                        "Ubuntu installation is still in progress."
+                        LinuxRuntimeControlResult.ALREADY_RUNNING ->
+                            "Ubuntu runtime is already running."
 
-                    LinuxRuntimeControlResult.FEATURE_UNAVAILABLE ->
-                        _blockedReason.value
-                            ?: "Linux runtime is unavailable on this device."
+                        LinuxRuntimeControlResult.NOT_INSTALLED ->
+                            "Ubuntu is not installed."
 
-                    LinuxRuntimeControlResult.START_FAILED ->
-                        ProotLinuxRuntimeBackend
-                            .getLastError()
-                            ?: "Ubuntu runtime failed to start."
+                        LinuxRuntimeControlResult.INSTALLATION_IN_PROGRESS ->
+                            "Ubuntu installation is still in progress."
 
-                    else ->
-                        "Ubuntu runtime could not be started."
-                }
+                        LinuxRuntimeControlResult.FEATURE_UNAVAILABLE ->
+                            _blockedReason.value
+                                ?: "Linux runtime is unavailable on this device."
 
-            _runtimeBusy.value =
-                false
+                        LinuxRuntimeControlResult.SAFE_MODE_BLOCKED ->
+                            "Ubuntu runtime startup is blocked by Safe Mode."
+
+                        LinuxRuntimeControlResult.START_FAILED ->
+                            ProotLinuxRuntimeBackend
+                                .getLastError()
+                                ?: "Ubuntu runtime failed to start."
+
+                        else ->
+                            "Ubuntu runtime could not be started."
+                    }
+
+            } catch (
+                exception: Exception
+            ) {
+
+                refreshInstallation()
+
+                _runtimeMessage.value =
+                    exception.message
+                        ?.takeIf { message ->
+                            message.isNotBlank()
+                        }
+                        ?: "Ubuntu runtime failed to start."
+
+            } finally {
+
+                _runtimeBusy.value =
+                    false
+            }
         }
     }
 
     fun stopLinux() {
 
-        if (_runtimeBusy.value) {
+        if (
+            _runtimeBusy.value
+        ) {
             return
         }
 
@@ -277,41 +332,62 @@ class LinuxViewModel : ViewModel() {
 
         viewModelScope.launch {
 
-            val result =
-                withContext(
-                    Dispatchers.IO
-                ) {
+            try {
 
-                    LinuxRuntimeController
-                        .stop()
-                }
+                val result =
+                    withContext(
+                        Dispatchers.IO
+                    ) {
 
-            refreshInstallation()
-            refreshInstallationMetrics()
+                        LinuxRuntimeController
+                            .stop()
+                    }
 
-            _runtimeMessage.value =
-                when (result) {
+                refreshInstallation()
 
-                    LinuxRuntimeControlResult.STOPPED ->
-                        "Ubuntu runtime stopped."
+                refreshInstallationMetrics()
 
-                    LinuxRuntimeControlResult.ALREADY_STOPPED ->
-                        "Ubuntu runtime is already stopped."
+                _runtimeMessage.value =
+                    when (
+                        result
+                    ) {
 
-                    LinuxRuntimeControlResult.NOT_INSTALLED ->
-                        "Ubuntu is not installed."
+                        LinuxRuntimeControlResult.STOPPED ->
+                            "Ubuntu runtime stopped."
 
-                    LinuxRuntimeControlResult.STOP_FAILED ->
-                        ProotLinuxRuntimeBackend
-                            .getLastError()
-                            ?: "Ubuntu runtime failed to stop."
+                        LinuxRuntimeControlResult.ALREADY_STOPPED ->
+                            "Ubuntu runtime is already stopped."
 
-                    else ->
-                        "Ubuntu runtime could not be stopped."
-                }
+                        LinuxRuntimeControlResult.NOT_INSTALLED ->
+                            "Ubuntu is not installed."
 
-            _runtimeBusy.value =
-                false
+                        LinuxRuntimeControlResult.STOP_FAILED ->
+                            ProotLinuxRuntimeBackend
+                                .getLastError()
+                                ?: "Ubuntu runtime failed to stop."
+
+                        else ->
+                            "Ubuntu runtime could not be stopped."
+                    }
+
+            } catch (
+                exception: Exception
+            ) {
+
+                refreshInstallation()
+
+                _runtimeMessage.value =
+                    exception.message
+                        ?.takeIf { message ->
+                            message.isNotBlank()
+                        }
+                        ?: "Ubuntu runtime failed to stop."
+
+            } finally {
+
+                _runtimeBusy.value =
+                    false
+            }
         }
     }
 
@@ -324,29 +400,37 @@ class LinuxViewModel : ViewModel() {
             return
         }
 
+        _runtimeBusy.value =
+            true
+
         viewModelScope.launch {
 
-            _runtimeBusy.value =
-                true
+            try {
 
-            withContext(
-                Dispatchers.IO
-            ) {
+                withContext(
+                    Dispatchers.IO
+                ) {
 
-                LinuxRuntimeController
-                    .stop()
+                    LinuxRuntimeController
+                        .stop()
+                }
+
+                LinuxRepository
+                    .removeLinux()
+
+                _runtimeMessage.value =
+                    null
+
+                LinuxRuntimeActivityReporter
+                    .clear()
+
+                refreshInstallation()
+
+            } finally {
+
+                _runtimeBusy.value =
+                    false
             }
-
-            LinuxRepository
-                .removeLinux()
-
-            _runtimeMessage.value =
-                null
-
-            refreshInstallation()
-
-            _runtimeBusy.value =
-                false
         }
     }
 
@@ -366,14 +450,14 @@ class LinuxViewModel : ViewModel() {
                 ?.reason
 
         /*
-         * Reconcile a stale repository RUNNING
-         * state if the native process exited while
-         * the screen was away.
+         * Reconcile repository runtime state against the
+         * actual native PRoot process.
          */
         LinuxRuntimeController
             .getSession()
 
         refreshInstallation()
+
         refreshInstallationMetrics()
     }
 
@@ -381,6 +465,12 @@ class LinuxViewModel : ViewModel() {
 
         _runtimeMessage.value =
             null
+    }
+
+    fun clearRuntimeActivity() {
+
+        LinuxRuntimeActivityReporter
+            .clear()
     }
 
     private fun refreshInstallationMetrics() {

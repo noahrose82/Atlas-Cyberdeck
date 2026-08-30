@@ -1,6 +1,7 @@
 package com.noahrose.pocketlab.feature.linux.runtime
 
 import com.noahrose.pocketlab.feature.linux.repository.LinuxRepository
+import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityReporter
 import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
 import com.noahrose.pocketlab.feature.system.bootstrap.DeviceBootstrapManager
 import com.noahrose.pocketlab.feature.system.capability.AtlasFeature
@@ -8,10 +9,7 @@ import com.noahrose.pocketlab.feature.system.capability.AtlasFeature
 object LinuxRuntimeController {
 
     /*
-     * F3P:
-     *
-     * The simulated backend has been replaced by
-     * the real PRoot-backed Ubuntu runtime.
+     * Atlas uses the real PRoot-backed Ubuntu runtime.
      */
     private val backend:
             LinuxRuntimeBackend =
@@ -25,11 +23,14 @@ object LinuxRuntimeController {
             LinuxRuntimeSession? {
 
         /*
-         * SAFE_MODE is authoritative.
+         * Do not emit routine activity from getSession().
          *
-         * Never expose a logical runtime session while
-         * the circuit breaker says normal runtime use is
-         * blocked.
+         * The UI calls this during state refreshes, so
+         * reporting here would flood the activity history.
+         */
+
+        /*
+         * SAFE_MODE is authoritative.
          */
         if (
             !LinuxRuntimeCircuitBreaker
@@ -61,13 +62,10 @@ object LinuxRuntimeController {
         }
 
         /*
-         * Do not expose a stale session if the
-         * underlying PRoot process has already
-         * exited.
+         * Reconcile a stale session if the native PRoot
+         * process exited unexpectedly.
          */
         if (
-            backend ===
-            ProotLinuxRuntimeBackend &&
             !ProotLinuxRuntimeBackend
                 .isProcessAlive()
         ) {
@@ -79,7 +77,9 @@ object LinuxRuntimeController {
                 LinuxRepository
                     .getInstallation()
 
-            if (installation.running) {
+            if (
+                installation.running
+            ) {
 
                 LinuxRepository
                     .stopLinux()
@@ -92,36 +92,72 @@ object LinuxRuntimeController {
     fun start():
             LinuxRuntimeControlResult {
 
+        /*
+         * A new explicit start request begins a fresh
+         * activity history.
+         */
+        LinuxRuntimeActivityReporter
+            .clear()
+
+        LinuxRuntimeActivityReporter
+            .info(
+                "Ubuntu runtime start requested."
+            )
+
         val installation =
             LinuxRepository
                 .getInstallation()
 
-        if (installation.isInstalling) {
+        /*
+         * Installation must be complete before runtime
+         * startup can be attempted.
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Checking Ubuntu installation state."
+            )
+
+        if (
+            installation.isInstalling
+        ) {
+
+            LinuxRuntimeActivityReporter
+                .warning(
+                    "Ubuntu installation is still in progress."
+                )
 
             return LinuxRuntimeControlResult
                 .INSTALLATION_IN_PROGRESS
         }
 
-        if (!installation.installed) {
+        if (
+            !installation.installed
+        ) {
+
+            LinuxRuntimeActivityReporter
+                .warning(
+                    "Ubuntu is not installed."
+                )
 
             return LinuxRuntimeControlResult
                 .NOT_INSTALLED
         }
 
+        LinuxRuntimeActivityReporter
+            .success(
+                "Ubuntu installation state verified."
+            )
+
         /*
          * ------------------------------------------------
          * PRIMARY RUNTIME SAFETY GATE
          * ------------------------------------------------
-         *
-         * Every normal runtime start request flows through
-         * LinuxRuntimeController. SAFE_MODE must therefore
-         * be enforced HERE before stale-state reconciliation,
-         * feature checks, or backend launch.
-         *
-         * RECOVERY_ARMED is intentionally allowed through;
-         * LinuxGuestCommandExecutor then restricts Ubuntu to
-         * recovery-safe commands until health is verified.
          */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Checking Atlas runtime safety state."
+            )
+
         if (
             !LinuxRuntimeCircuitBreaker
                 .canStartRuntime()
@@ -130,13 +166,6 @@ object LinuxRuntimeController {
             activeSession =
                 null
 
-            /*
-             * The breaker normally stops PRoot when it
-             * trips. Reconcile the repository flag here
-             * as a second layer in case the process is
-             * already gone but the transient RUNNING flag
-             * was still true.
-             */
             if (
                 !ProotLinuxRuntimeBackend
                     .isProcessAlive()
@@ -146,24 +175,50 @@ object LinuxRuntimeController {
                     .stopLinux()
             }
 
+            LinuxRuntimeActivityReporter
+                .error(
+                    "Runtime startup blocked by Atlas Safe Mode."
+                )
+
             return LinuxRuntimeControlResult
                 .SAFE_MODE_BLOCKED
         }
 
+        LinuxRuntimeActivityReporter
+            .success(
+                "Runtime safety state allows startup."
+            )
+
         /*
-         * Reconcile a stale RUNNING flag before
-         * deciding that Linux is already running.
+         * Reconcile stale repository RUNNING state.
          */
-        if (installation.running) {
+        LinuxRuntimeActivityReporter
+            .info(
+                "Checking existing PRoot runtime state."
+            )
+
+        if (
+            installation.running
+        ) {
 
             if (
                 ProotLinuxRuntimeBackend
                     .isProcessAlive()
             ) {
 
+                LinuxRuntimeActivityReporter
+                    .success(
+                        "Ubuntu runtime is already running."
+                    )
+
                 return LinuxRuntimeControlResult
                     .ALREADY_RUNNING
             }
+
+            LinuxRuntimeActivityReporter
+                .warning(
+                    "Detected stale runtime state; reconciling repository."
+                )
 
             LinuxRepository
                 .stopLinux()
@@ -172,17 +227,46 @@ object LinuxRuntimeController {
                 null
         }
 
+        /*
+         * Device capability gate.
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Checking Linux device capability."
+            )
+
         val linuxAvailable =
             DeviceBootstrapManager
                 .isFeatureAvailable(
                     AtlasFeature.LINUX
                 )
 
-        if (!linuxAvailable) {
+        if (
+            !linuxAvailable
+        ) {
+
+            LinuxRuntimeActivityReporter
+                .error(
+                    "Linux runtime is unavailable on this device."
+                )
 
             return LinuxRuntimeControlResult
                 .FEATURE_UNAVAILABLE
         }
+
+        LinuxRuntimeActivityReporter
+            .success(
+                "Linux device capability verified."
+            )
+
+        /*
+         * Delegate the actual native startup sequence to
+         * the PRoot backend.
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Starting PRoot runtime backend."
+            )
 
         return when (
             val result =
@@ -194,6 +278,17 @@ object LinuxRuntimeController {
                 val session =
                     result.session
 
+                LinuxRuntimeActivityReporter
+                    .info(
+                        "Validating PRoot runtime session."
+                    )
+
+                /*
+                 * Backend success is not enough.
+                 *
+                 * Atlas requires both a logical session and
+                 * a living native process.
+                 */
                 if (
                     session == null ||
                     !ProotLinuxRuntimeBackend
@@ -206,18 +301,30 @@ object LinuxRuntimeController {
                     LinuxRepository
                         .stopLinux()
 
-                    return LinuxRuntimeControlResult
+                    LinuxRuntimeActivityReporter
+                        .error(
+                            "PRoot backend did not produce a valid runtime session."
+                        )
+
+                    LinuxRuntimeControlResult
                         .START_FAILED
+
+                } else {
+
+                    activeSession =
+                        session
+
+                    LinuxRepository
+                        .startLinux()
+
+                    LinuxRuntimeActivityReporter
+                        .success(
+                            "Ubuntu runtime is running."
+                        )
+
+                    LinuxRuntimeControlResult
+                        .STARTED
                 }
-
-                activeSession =
-                    session
-
-                LinuxRepository
-                    .startLinux()
-
-                LinuxRuntimeControlResult
-                    .STARTED
             }
 
             is LinuxRuntimeBackendResult.Failure -> {
@@ -227,6 +334,15 @@ object LinuxRuntimeController {
 
                 LinuxRepository
                     .stopLinux()
+
+                LinuxRuntimeActivityReporter
+                    .error(
+                        result.message
+                            .takeIf { message ->
+                                message.isNotBlank()
+                            }
+                            ?: "PRoot runtime backend failed to start."
+                    )
 
                 LinuxRuntimeControlResult
                     .START_FAILED
@@ -237,26 +353,43 @@ object LinuxRuntimeController {
     fun stop():
             LinuxRuntimeControlResult {
 
+        LinuxRuntimeActivityReporter
+            .info(
+                "Ubuntu runtime stop requested."
+            )
+
         val installation =
             LinuxRepository
                 .getInstallation()
 
-        if (!installation.installed) {
+        if (
+            !installation.installed
+        ) {
 
             activeSession =
                 null
 
+            LinuxRuntimeActivityReporter
+                .warning(
+                    "Ubuntu is not installed."
+                )
+
             return LinuxRuntimeControlResult
                 .NOT_INSTALLED
         }
+
+        LinuxRuntimeActivityReporter
+            .info(
+                "Checking PRoot process state."
+            )
 
         val processAlive =
             ProotLinuxRuntimeBackend
                 .isProcessAlive()
 
         /*
-         * Repository and process both agree that
-         * the runtime is already stopped.
+         * Repository state and native process state agree
+         * that Linux is already stopped.
          */
         if (
             !installation.running &&
@@ -266,12 +399,23 @@ object LinuxRuntimeController {
             activeSession =
                 null
 
+            LinuxRuntimeActivityReporter
+                .info(
+                    "Ubuntu runtime is already stopped."
+                )
+
             return LinuxRuntimeControlResult
                 .ALREADY_STOPPED
         }
 
+        LinuxRuntimeActivityReporter
+            .info(
+                "Stopping PRoot runtime backend."
+            )
+
         return when (
-            backend.stop()
+            val result =
+                backend.stop()
         ) {
 
             is LinuxRuntimeBackendResult.Success -> {
@@ -282,16 +426,29 @@ object LinuxRuntimeController {
                 LinuxRepository
                     .stopLinux()
 
+                LinuxRuntimeActivityReporter
+                    .success(
+                        "Ubuntu runtime stopped."
+                    )
+
                 LinuxRuntimeControlResult
                     .STOPPED
             }
 
             is LinuxRuntimeBackendResult.Failure -> {
 
+                LinuxRuntimeActivityReporter
+                    .error(
+                        result.message
+                            .takeIf { message ->
+                                message.isNotBlank()
+                            }
+                            ?: "PRoot runtime backend failed to stop."
+                    )
+
                 /*
-                 * Do not claim STOPPED when the
-                 * backend could not terminate the
-                 * actual process.
+                 * Do not report STOPPED if the backend
+                 * could not terminate the actual process.
                  */
                 LinuxRuntimeControlResult
                     .STOP_FAILED

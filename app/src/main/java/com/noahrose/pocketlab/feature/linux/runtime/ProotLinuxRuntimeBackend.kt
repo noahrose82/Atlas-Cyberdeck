@@ -1,6 +1,7 @@
 package com.noahrose.pocketlab.feature.linux.runtime
 
 import android.util.Log
+import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityReporter
 import com.noahrose.pocketlab.feature.linux.runtime.handshake.LinuxGuestHandshake
 import com.noahrose.pocketlab.feature.linux.runtime.handshake.LinuxGuestHandshakeResult
 import com.noahrose.pocketlab.feature.linux.runtime.network.LinuxGuestDnsManager
@@ -28,31 +29,29 @@ object ProotLinuxRuntimeBackend :
         AndroidLinuxProcessLauncher()
 
     /*
-     * The actual native PRoot process currently
-     * owned by Atlas.
+     * Native PRoot process currently owned by Atlas.
      */
     private var activeProcess:
             LinuxProcessHandle? =
         null
 
     /*
-     * Logical Atlas runtime session associated
-     * with the active PRoot process.
+     * Logical runtime session associated with the
+     * active PRoot process.
      */
     private var activeSession:
             LinuxRuntimeSession? =
         null
 
     /*
-     * Last runtime startup/shutdown error.
+     * Last runtime startup or shutdown error.
      */
     private var lastError:
             String? =
         null
 
     /*
-     * Last successfully captured or partially
-     * captured Ubuntu guest handshake output.
+     * Last Ubuntu guest handshake output.
      */
     private var lastGuestOutput:
             String? =
@@ -75,11 +74,11 @@ object ProotLinuxRuntimeBackend :
 
         Log.i(
             TAG,
-            "Runtime start requested."
+            "Runtime backend start requested."
         )
 
         /*
-         * Do not spawn duplicate PRoot runtimes.
+         * Do not create a second PRoot runtime.
          */
         val existingProcess =
             activeProcess
@@ -89,10 +88,10 @@ object ProotLinuxRuntimeBackend :
             existingProcess.isAlive
         ) {
 
-            Log.i(
-                TAG,
-                "Existing PRoot process is already alive."
-            )
+            LinuxRuntimeActivityReporter
+                .success(
+                    "Existing PRoot process is already active."
+                )
 
             val existingSession =
                 activeSession
@@ -121,7 +120,7 @@ object ProotLinuxRuntimeBackend :
         }
 
         /*
-         * Any process reaching this point is stale.
+         * Clear stale backend references.
          */
         activeProcess =
             null
@@ -135,14 +134,50 @@ object ProotLinuxRuntimeBackend :
         lastGuestOutput =
             null
 
-        Log.i(
-            TAG,
-            "Building PRoot launch specification."
-        )
+        /*
+         * ------------------------------------------------
+         * BUILD PROOT SPECIFICATION
+         * ------------------------------------------------
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Building PRoot launch specification."
+            )
 
         val specResult =
-            LinuxProotProcessSpecFactory
-                .create()
+            try {
+
+                LinuxProotProcessSpecFactory
+                    .create()
+
+            } catch (
+                exception: Exception
+            ) {
+
+                val message =
+                    exception.message
+                        ?: "Unexpected failure while building the PRoot launch specification."
+
+                lastError =
+                    message
+
+                LinuxRuntimeActivityReporter
+                    .error(
+                        message
+                    )
+
+                Log.e(
+                    TAG,
+                    message,
+                    exception
+                )
+
+                return LinuxRuntimeBackendResult
+                    .Failure(
+                        message =
+                            message
+                    )
+            }
 
         val spec =
             when (
@@ -151,6 +186,11 @@ object ProotLinuxRuntimeBackend :
 
                 is LinuxProotProcessSpecResult.Ready -> {
 
+                    LinuxRuntimeActivityReporter
+                        .success(
+                            "PRoot launch specification ready."
+                        )
+
                     specResult.spec
                 }
 
@@ -158,6 +198,11 @@ object ProotLinuxRuntimeBackend :
 
                     lastError =
                         specResult.message
+
+                    LinuxRuntimeActivityReporter
+                        .error(
+                            specResult.message
+                        )
 
                     Log.e(
                         TAG,
@@ -174,78 +219,24 @@ object ProotLinuxRuntimeBackend :
 
         /*
          * ------------------------------------------------
-         * UBUNTU DNS SYNCHRONIZATION
+         * DNS SYNCHRONIZATION
          * ------------------------------------------------
-         *
-         * LinuxProotProcessSpec currently uses the
-         * Ubuntu rootfs as its working directory.
-         *
-         * Before PRoot launches, synchronize
-         * Android's active DNS servers into:
-         *
-         * rootfs/etc/resolv.conf
-         *
-         * DNS synchronization failure does NOT
-         * prevent Ubuntu from starting. Atlas may
-         * still be intentionally operating offline.
          */
-        val rootfsDirectory =
-            spec.workingDirectory
-
-        if (
-            rootfsDirectory != null
-        ) {
-
-            when (
-                val dnsResult =
-                    LinuxGuestDnsManager
-                        .synchronize(
-                            rootfsDirectory
-                        )
-            ) {
-
-                is LinuxGuestDnsSyncResult.Success -> {
-
-                    Log.i(
-                        DNS_TAG,
-                        "Ubuntu DNS synchronized: ${
-                            dnsResult
-                                .dnsServers
-                                .joinToString(
-                                    ", "
-                                )
-                        }"
-                    )
-                }
-
-                is LinuxGuestDnsSyncResult.Skipped -> {
-
-                    Log.w(
-                        DNS_TAG,
-                        "Ubuntu DNS synchronization skipped: ${dnsResult.message}"
-                    )
-                }
-
-                is LinuxGuestDnsSyncResult.Failure -> {
-
-                    Log.w(
-                        DNS_TAG,
-                        "Ubuntu DNS synchronization failed: ${dnsResult.message}",
-                        dnsResult.cause
-                    )
-                }
-            }
-
-        } else {
-
-            Log.w(
-                DNS_TAG,
-                "Ubuntu DNS synchronization skipped because the rootfs directory is unavailable."
+        LinuxRuntimeActivityReporter
+            .info(
+                "Synchronizing Ubuntu DNS configuration."
             )
-        }
+
+        synchronizeGuestDns(
+            rootfsDirectory =
+                spec.workingDirectory
+        )
 
         /*
-         * Launch diagnostics.
+         * Detailed absolute paths remain in Logcat.
+         *
+         * The user-facing activity history intentionally
+         * reports concise runtime events.
          */
         Log.i(
             TAG,
@@ -263,10 +254,7 @@ object ProotLinuxRuntimeBackend :
         )
 
         /*
-         * Verify that the external PRoot loader
-         * supplied through PROOT_LOADER really
-         * resolves to Android's executable native
-         * library directory.
+         * Verify external PRoot loader diagnostics.
          */
         val loaderPath =
             spec.environment[
@@ -305,266 +293,68 @@ object ProotLinuxRuntimeBackend :
             )
         }
 
-        Log.i(
-            TAG,
-            "Launching verified PRoot runtime."
-        )
+        /*
+         * ------------------------------------------------
+         * START NATIVE PROOT PROCESS
+         * ------------------------------------------------
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Launching native PRoot process."
+            )
 
-        return when (
-            val launchResult =
+        val launchResult =
+            try {
+
                 processLauncher
                     .launch(
                         spec
                     )
+
+            } catch (
+                exception: Exception
+            ) {
+
+                val message =
+                    exception.message
+                        ?: "Unexpected failure while launching PRoot."
+
+                lastError =
+                    message
+
+                LinuxRuntimeActivityReporter
+                    .error(
+                        message
+                    )
+
+                Log.e(
+                    TAG,
+                    "PRoot launch failed: $message",
+                    exception
+                )
+
+                return LinuxRuntimeBackendResult
+                    .Failure(
+                        message =
+                            message
+                    )
+            }
+
+        return when (
+            launchResult
         ) {
 
             is LinuxProcessLaunchResult.Success -> {
 
-                val process =
-                    launchResult.process
-
-                Log.i(
-                    TAG,
-                    "Android created PRoot process."
-                )
-
-                /*
-                 * ProcessBuilder.start() only proves
-                 * that Android created the process.
-                 */
-                if (
-                    !process.isAlive
-                ) {
-
-                    val message =
-                        "PRoot process exited immediately after launch."
-
-                    lastError =
-                        message
-
-                    Log.e(
-                        TAG,
-                        message
+                LinuxRuntimeActivityReporter
+                    .info(
+                        "Android created the PRoot process."
                     )
 
-                    runCatching {
-
-                        process.forceStop()
-
-                    }.onFailure { exception ->
-
-                        Log.w(
-                            TAG,
-                            "Cleanup after failed PRoot launch failed.",
-                            exception
-                        )
-                    }
-
-                    activeProcess =
-                        null
-
-                    activeSession =
-                        null
-
-                    return LinuxRuntimeBackendResult
-                        .Failure(
-                            message =
-                                message
-                        )
-                }
-
-                Log.i(
-                    TAG,
-                    "PRoot process is alive."
+                handleSuccessfulProcessLaunch(
+                    process =
+                        launchResult.process
                 )
-
-                /*
-                 * A living PRoot process alone does
-                 * not prove Ubuntu itself works.
-                 *
-                 * Execute a real guest handshake.
-                 */
-                Log.i(
-                    GUEST_TAG,
-                    "Beginning Ubuntu guest handshake."
-                )
-
-                when (
-                    val handshake =
-                        LinuxGuestHandshake
-                            .execute(
-                                process
-                            )
-                ) {
-
-                    is LinuxGuestHandshakeResult.Success -> {
-
-                        lastGuestOutput =
-                            handshake.output
-
-                        handshake
-                            .output
-                            .lines()
-                            .forEach { line ->
-
-                                if (
-                                    line.isNotBlank()
-                                ) {
-
-                                    Log.i(
-                                        GUEST_TAG,
-                                        line
-                                    )
-                                }
-                            }
-
-                        if (
-                            handshake
-                                .errorOutput
-                                .isNotBlank()
-                        ) {
-
-                            Log.w(
-                                GUEST_TAG,
-                                "Guest stderr: ${
-                                    handshake
-                                        .errorOutput
-                                        .trim()
-                                }"
-                            )
-                        }
-
-                        Log.i(
-                            GUEST_TAG,
-                            "Ubuntu guest handshake VERIFIED."
-                        )
-
-                        /*
-                         * Ubuntu has now proven:
-                         *
-                         * - guest shell execution
-                         * - uid=0 identity
-                         * - /root working directory
-                         * - ARM64 architecture
-                         * - Ubuntu OS identity
-                         */
-                        val session =
-                            LinuxRuntimeSession(
-                                processId =
-                                    process.processId,
-
-                                startedAtEpochMillis =
-                                    System.currentTimeMillis(),
-
-                                workingDirectory =
-                                    "/root"
-                            )
-
-                        activeProcess =
-                            process
-
-                        activeSession =
-                            session
-
-                        lastError =
-                            null
-
-                        Log.i(
-                            TAG,
-                            "Ubuntu runtime session started. " +
-                                    "pid=${
-                                        session.processId
-                                            ?: "unavailable"
-                                    }"
-                        )
-
-                        LinuxRuntimeBackendResult
-                            .Success(
-                                session =
-                                    session
-                            )
-                    }
-
-                    is LinuxGuestHandshakeResult.Failure -> {
-
-                        lastError =
-                            handshake.message
-
-                        lastGuestOutput =
-                            handshake.output
-
-                        Log.e(
-                            GUEST_TAG,
-                            "Ubuntu guest handshake FAILED: ${handshake.message}"
-                        )
-
-                        if (
-                            handshake
-                                .output
-                                .isNotBlank()
-                        ) {
-
-                            Log.e(
-                                GUEST_TAG,
-                                "Guest stdout: ${
-                                    handshake
-                                        .output
-                                        .trim()
-                                }"
-                            )
-                        }
-
-                        if (
-                            handshake
-                                .errorOutput
-                                .isNotBlank()
-                        ) {
-
-                            Log.e(
-                                GUEST_TAG,
-                                "Guest stderr: ${
-                                    handshake
-                                        .errorOutput
-                                        .trim()
-                                }"
-                            )
-                        }
-
-                        /*
-                         * Never leave a failed guest
-                         * runtime alive.
-                         */
-                        runCatching {
-
-                            if (
-                                process.isAlive
-                            ) {
-
-                                process.forceStop()
-                            }
-
-                        }.onFailure { exception ->
-
-                            Log.w(
-                                TAG,
-                                "Unable to clean up failed guest process.",
-                                exception
-                            )
-                        }
-
-                        activeProcess =
-                            null
-
-                        activeSession =
-                            null
-
-                        LinuxRuntimeBackendResult
-                            .Failure(
-                                message =
-                                    handshake.message
-                            )
-                    }
-                }
             }
 
             is LinuxProcessLaunchResult.Failure -> {
@@ -577,6 +367,11 @@ object ProotLinuxRuntimeBackend :
 
                 lastError =
                     launchResult.message
+
+                LinuxRuntimeActivityReporter
+                    .error(
+                        launchResult.message
+                    )
 
                 Log.e(
                     TAG,
@@ -593,17 +388,365 @@ object ProotLinuxRuntimeBackend :
         }
     }
 
+    private fun handleSuccessfulProcessLaunch(
+        process: LinuxProcessHandle
+    ): LinuxRuntimeBackendResult {
+
+        /*
+         * ProcessBuilder successfully creating a process
+         * does not prove PRoot remained alive.
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Verifying PRoot process state."
+            )
+
+        if (
+            !process.isAlive
+        ) {
+
+            val message =
+                "PRoot process exited immediately after launch."
+
+            lastError =
+                message
+
+            LinuxRuntimeActivityReporter
+                .error(
+                    message
+                )
+
+            Log.e(
+                TAG,
+                message
+            )
+
+            cleanupFailedProcess(
+                process =
+                    process
+            )
+
+            return LinuxRuntimeBackendResult
+                .Failure(
+                    message =
+                        message
+                )
+        }
+
+        LinuxRuntimeActivityReporter
+            .success(
+                "PRoot process is alive."
+            )
+
+        /*
+         * ------------------------------------------------
+         * UBUNTU GUEST HANDSHAKE
+         * ------------------------------------------------
+         *
+         * A living PRoot process alone does not prove that
+         * Ubuntu is functioning.
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Beginning Ubuntu guest handshake."
+            )
+
+        Log.i(
+            GUEST_TAG,
+            "Beginning Ubuntu guest handshake."
+        )
+
+        val handshake =
+            try {
+
+                LinuxGuestHandshake
+                    .execute(
+                        process
+                    )
+
+            } catch (
+                exception: Exception
+            ) {
+
+                val message =
+                    exception.message
+                        ?: "Ubuntu guest handshake threw an unexpected exception."
+
+                lastError =
+                    message
+
+                LinuxRuntimeActivityReporter
+                    .error(
+                        message
+                    )
+
+                Log.e(
+                    GUEST_TAG,
+                    message,
+                    exception
+                )
+
+                cleanupFailedProcess(
+                    process =
+                        process
+                )
+
+                return LinuxRuntimeBackendResult
+                    .Failure(
+                        message =
+                            message
+                    )
+            }
+
+        return when (
+            handshake
+        ) {
+
+            is LinuxGuestHandshakeResult.Success -> {
+
+                handleSuccessfulHandshake(
+                    process =
+                        process,
+
+                    handshake =
+                        handshake
+                )
+            }
+
+            is LinuxGuestHandshakeResult.Failure -> {
+
+                handleFailedHandshake(
+                    process =
+                        process,
+
+                    handshake =
+                        handshake
+                )
+            }
+        }
+    }
+
+    private fun handleSuccessfulHandshake(
+        process: LinuxProcessHandle,
+        handshake: LinuxGuestHandshakeResult.Success
+    ): LinuxRuntimeBackendResult {
+
+        lastGuestOutput =
+            handshake.output
+
+        handshake
+            .output
+            .lines()
+            .forEach { line ->
+
+                if (
+                    line.isNotBlank()
+                ) {
+
+                    Log.i(
+                        GUEST_TAG,
+                        line
+                    )
+                }
+            }
+
+        if (
+            handshake
+                .errorOutput
+                .isNotBlank()
+        ) {
+
+            Log.w(
+                GUEST_TAG,
+                "Guest stderr: ${
+                    handshake
+                        .errorOutput
+                        .trim()
+                }"
+            )
+        }
+
+        LinuxRuntimeActivityReporter
+            .success(
+                "Ubuntu guest handshake verified."
+            )
+
+        Log.i(
+            GUEST_TAG,
+            "Ubuntu guest handshake VERIFIED."
+        )
+
+        /*
+         * Verify that PRoot survived the complete guest
+         * handshake before exposing a session.
+         */
+        LinuxRuntimeActivityReporter
+            .info(
+                "Verifying PRoot process after guest handshake."
+            )
+
+        if (
+            !process.isAlive
+        ) {
+
+            val message =
+                "PRoot process exited after the Ubuntu guest handshake."
+
+            lastError =
+                message
+
+            LinuxRuntimeActivityReporter
+                .error(
+                    message
+                )
+
+            Log.e(
+                TAG,
+                message
+            )
+
+            cleanupFailedProcess(
+                process =
+                    process
+            )
+
+            return LinuxRuntimeBackendResult
+                .Failure(
+                    message =
+                        message
+                )
+        }
+
+        /*
+         * Ubuntu has now demonstrated a functional guest
+         * environment and the native process remains alive.
+         */
+        val session =
+            LinuxRuntimeSession(
+                processId =
+                    process.processId,
+
+                startedAtEpochMillis =
+                    System.currentTimeMillis(),
+
+                workingDirectory =
+                    "/root"
+            )
+
+        activeProcess =
+            process
+
+        activeSession =
+            session
+
+        lastError =
+            null
+
+        LinuxRuntimeActivityReporter
+            .success(
+                "Ubuntu runtime session established."
+            )
+
+        Log.i(
+            TAG,
+            "Ubuntu runtime session started. " +
+                    "pid=${
+                        session.processId
+                            ?: "unavailable"
+                    }"
+        )
+
+        return LinuxRuntimeBackendResult
+            .Success(
+                session =
+                    session
+            )
+    }
+
+    private fun handleFailedHandshake(
+        process: LinuxProcessHandle,
+        handshake: LinuxGuestHandshakeResult.Failure
+    ): LinuxRuntimeBackendResult {
+
+        lastError =
+            handshake.message
+
+        lastGuestOutput =
+            handshake.output
+
+        LinuxRuntimeActivityReporter
+            .error(
+                "Ubuntu guest handshake failed: ${handshake.message}"
+            )
+
+        Log.e(
+            GUEST_TAG,
+            "Ubuntu guest handshake FAILED: ${handshake.message}"
+        )
+
+        if (
+            handshake
+                .output
+                .isNotBlank()
+        ) {
+
+            Log.e(
+                GUEST_TAG,
+                "Guest stdout: ${
+                    handshake
+                        .output
+                        .trim()
+                }"
+            )
+        }
+
+        if (
+            handshake
+                .errorOutput
+                .isNotBlank()
+        ) {
+
+            Log.e(
+                GUEST_TAG,
+                "Guest stderr: ${
+                    handshake
+                        .errorOutput
+                        .trim()
+                }"
+            )
+        }
+
+        LinuxRuntimeActivityReporter
+            .warning(
+                "Cleaning up failed PRoot process."
+            )
+
+        cleanupFailedProcess(
+            process =
+                process
+        )
+
+        return LinuxRuntimeBackendResult
+            .Failure(
+                message =
+                    handshake.message
+            )
+    }
+
     override fun stop():
             LinuxRuntimeBackendResult {
 
         Log.i(
             TAG,
-            "Runtime stop requested."
+            "Runtime backend stop requested."
         )
 
         val process =
             activeProcess
 
+        /*
+         * No native process is currently owned by Atlas.
+         */
         if (
             process == null
         ) {
@@ -614,10 +757,10 @@ object ProotLinuxRuntimeBackend :
             lastError =
                 null
 
-            Log.i(
-                TAG,
-                "No active PRoot process exists."
-            )
+            LinuxRuntimeActivityReporter
+                .info(
+                    "No active PRoot process exists."
+                )
 
             return LinuxRuntimeBackendResult
                 .Success()
@@ -629,28 +772,45 @@ object ProotLinuxRuntimeBackend :
                 process.isAlive
             ) {
 
-                Log.i(
-                    TAG,
-                    "Requesting normal PRoot termination."
-                )
+                LinuxRuntimeActivityReporter
+                    .info(
+                        "Requesting normal PRoot termination."
+                    )
 
                 process.stop()
 
-                /*
-                 * If normal termination does not
-                 * immediately stop the runtime,
-                 * force termination.
-                 */
                 if (
                     process.isAlive
                 ) {
 
-                    Log.w(
-                        TAG,
-                        "PRoot remained alive; forcing termination."
-                    )
+                    LinuxRuntimeActivityReporter
+                        .warning(
+                            "PRoot remained alive; forcing termination."
+                        )
 
                     process.forceStop()
+                }
+
+                if (
+                    process.isAlive
+                ) {
+
+                    val message =
+                        "PRoot remained alive after forced termination."
+
+                    lastError =
+                        message
+
+                    LinuxRuntimeActivityReporter
+                        .error(
+                            message
+                        )
+
+                    return LinuxRuntimeBackendResult
+                        .Failure(
+                            message =
+                                message
+                        )
                 }
             }
 
@@ -662,6 +822,11 @@ object ProotLinuxRuntimeBackend :
 
             lastError =
                 null
+
+            LinuxRuntimeActivityReporter
+                .success(
+                    "Native PRoot process terminated."
+                )
 
             Log.i(
                 TAG,
@@ -682,6 +847,11 @@ object ProotLinuxRuntimeBackend :
             lastError =
                 message
 
+            LinuxRuntimeActivityReporter
+                .error(
+                    message
+                )
+
             Log.e(
                 TAG,
                 "PRoot stop failed: $message",
@@ -697,8 +867,142 @@ object ProotLinuxRuntimeBackend :
     }
 
     /*
-     * Returns true only when Atlas currently owns
-     * a living native PRoot process.
+     * Synchronize Android DNS into Ubuntu.
+     *
+     * DNS failure remains non-fatal because Atlas may
+     * intentionally be operating offline.
+     */
+    private fun synchronizeGuestDns(
+        rootfsDirectory: File?
+    ) {
+
+        if (
+            rootfsDirectory == null
+        ) {
+
+            LinuxRuntimeActivityReporter
+                .warning(
+                    "Ubuntu DNS synchronization skipped."
+                )
+
+            Log.w(
+                DNS_TAG,
+                "Ubuntu DNS synchronization skipped because the rootfs directory is unavailable."
+            )
+
+            return
+        }
+
+        try {
+
+            when (
+                val dnsResult =
+                    LinuxGuestDnsManager
+                        .synchronize(
+                            rootfsDirectory
+                        )
+            ) {
+
+                is LinuxGuestDnsSyncResult.Success -> {
+
+                    LinuxRuntimeActivityReporter
+                        .success(
+                            "Ubuntu DNS configuration synchronized."
+                        )
+
+                    Log.i(
+                        DNS_TAG,
+                        "Ubuntu DNS synchronized: ${
+                            dnsResult
+                                .dnsServers
+                                .joinToString(
+                                    ", "
+                                )
+                        }"
+                    )
+                }
+
+                is LinuxGuestDnsSyncResult.Skipped -> {
+
+                    LinuxRuntimeActivityReporter
+                        .warning(
+                            "Ubuntu DNS synchronization skipped: ${dnsResult.message}"
+                        )
+
+                    Log.w(
+                        DNS_TAG,
+                        "Ubuntu DNS synchronization skipped: ${dnsResult.message}"
+                    )
+                }
+
+                is LinuxGuestDnsSyncResult.Failure -> {
+
+                    LinuxRuntimeActivityReporter
+                        .warning(
+                            "Ubuntu DNS synchronization failed; continuing startup."
+                        )
+
+                    Log.w(
+                        DNS_TAG,
+                        "Ubuntu DNS synchronization failed: ${dnsResult.message}",
+                        dnsResult.cause
+                    )
+                }
+            }
+
+        } catch (
+            exception: Exception
+        ) {
+
+            LinuxRuntimeActivityReporter
+                .warning(
+                    "Ubuntu DNS synchronization encountered an error; continuing startup."
+                )
+
+            Log.w(
+                DNS_TAG,
+                "Ubuntu DNS synchronization threw an exception; continuing runtime startup.",
+                exception
+            )
+        }
+    }
+
+    /*
+     * Clean up a native process after failed startup or
+     * failed Ubuntu guest verification.
+     */
+    private fun cleanupFailedProcess(
+        process: LinuxProcessHandle
+    ) {
+
+        runCatching {
+
+            if (
+                process.isAlive
+            ) {
+
+                process.forceStop()
+            }
+
+        }.onFailure { exception ->
+
+            Log.w(
+                TAG,
+                "Unable to clean up failed PRoot process.",
+                exception
+            )
+        }
+
+        activeProcess =
+            null
+
+        activeSession =
+            null
+    }
+
+    /*
+     * Returns true only when Atlas currently owns a living
+     * native PRoot process.
      */
     fun isProcessAlive():
             Boolean {
@@ -723,8 +1027,8 @@ object ProotLinuxRuntimeBackend :
     }
 
     /*
-     * Exposes the live native process to the
-     * persistent Ubuntu command bridge.
+     * Expose the active process to the persistent Ubuntu
+     * command bridge.
      */
     fun getProcess():
             LinuxProcessHandle? {
