@@ -45,6 +45,8 @@ import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.system.error.AtlasError
 import com.noahrose.pocketlab.feature.system.error.AtlasErrors
 import com.noahrose.pocketlab.ui.components.AtlasErrorDialog
+import com.noahrose.pocketlab.ui.components.AtlasFileSearchDialog
+import com.noahrose.pocketlab.ui.components.AtlasFileTreeDialog
 
 @Composable
 fun FilesScreen() {
@@ -137,6 +139,16 @@ fun FilesScreen() {
         mutableStateOf<FileNode?>(
             null
         )
+    }
+
+    var showSearchDialog by
+    remember {
+        mutableStateOf(false)
+    }
+
+    var showTreeDialog by
+    remember {
+        mutableStateOf(false)
     }
 
     /*
@@ -347,10 +359,9 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        4.dp
-                    )
+                Modifier.height(
+                    4.dp
+                )
         )
 
         Text(
@@ -370,10 +381,9 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        16.dp
-                    )
+                Modifier.height(
+                    16.dp
+                )
         )
 
         /*
@@ -420,10 +430,9 @@ fun FilesScreen() {
 
                 Spacer(
                     modifier =
-                        Modifier
-                            .height(
-                                4.dp
-                            )
+                        Modifier.height(
+                            4.dp
+                        )
                 )
 
                 Text(
@@ -448,15 +457,14 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        12.dp
-                    )
+                Modifier.height(
+                    12.dp
+                )
         )
 
         /*
          * ------------------------------------------------
-         * MAIN ACTIONS
+         * FILE ACTIONS
          * ------------------------------------------------
          */
         Row(
@@ -465,10 +473,9 @@ fun FilesScreen() {
                     .fillMaxWidth(),
 
             horizontalArrangement =
-                Arrangement
-                    .spacedBy(
-                        8.dp
-                    )
+                Arrangement.spacedBy(
+                    8.dp
+                )
         ) {
 
             Button(
@@ -553,14 +560,81 @@ fun FilesScreen() {
             }
         }
 
+        Spacer(
+            modifier =
+                Modifier.height(
+                    8.dp
+                )
+        )
+
+        /*
+         * ------------------------------------------------
+         * SEARCH / TREE TOOLS
+         * ------------------------------------------------
+         */
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
+
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    8.dp
+                )
+        ) {
+
+            Button(
+                modifier =
+                    Modifier
+                        .weight(
+                            1f
+                        ),
+
+                onClick = {
+
+                    statusMessage =
+                        null
+
+                    showSearchDialog =
+                        true
+                }
+            ) {
+
+                Text(
+                    "Search"
+                )
+            }
+
+            Button(
+                modifier =
+                    Modifier
+                        .weight(
+                            1f
+                        ),
+
+                onClick = {
+
+                    statusMessage =
+                        null
+
+                    showTreeDialog =
+                        true
+                }
+            ) {
+
+                Text(
+                    "Tree View"
+                )
+            }
+        }
+
         if (statusMessage != null) {
 
             Spacer(
                 modifier =
-                    Modifier
-                        .height(
-                            10.dp
-                        )
+                    Modifier.height(
+                        10.dp
+                    )
             )
 
             Text(
@@ -581,20 +655,18 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        16.dp
-                    )
+                Modifier.height(
+                    16.dp
+                )
         )
 
         HorizontalDivider()
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        8.dp
-                    )
+                Modifier.height(
+                    8.dp
+                )
         )
 
         /*
@@ -643,10 +715,9 @@ fun FilesScreen() {
                         ),
 
                 verticalArrangement =
-                    Arrangement
-                        .spacedBy(
-                            8.dp
-                        )
+                    Arrangement.spacedBy(
+                        8.dp
+                    )
             ) {
 
                 items(
@@ -749,6 +820,38 @@ fun FilesScreen() {
                 }
             }
         }
+    }
+
+    /*
+     * ------------------------------------------------
+     * SEARCH
+     * ------------------------------------------------
+     */
+    if (showSearchDialog) {
+
+        AtlasFileSearchDialog(
+            onDismiss = {
+
+                showSearchDialog =
+                    false
+            }
+        )
+    }
+
+    /*
+     * ------------------------------------------------
+     * TREE VIEW
+     * ------------------------------------------------
+     */
+    if (showTreeDialog) {
+
+        AtlasFileTreeDialog(
+            onDismiss = {
+
+                showTreeDialog =
+                    false
+            }
+        )
     }
 
     /*
@@ -867,6 +970,9 @@ fun FilesScreen() {
 
                 onRename = { newName ->
 
+                    val oldName =
+                        entry.name
+
                     val duplicateExists =
                         currentEntries
                             .any { existing ->
@@ -889,7 +995,7 @@ fun FilesScreen() {
                                     "Rename Blocked",
 
                                 whatHappened =
-                                    "Atlas could not rename \"${entry.name}\" to \"$newName\".",
+                                    "Atlas could not rename \"$oldName\" to \"$newName\".",
 
                                 whyItHappened =
                                     "An item named \"$newName\" already exists in this folder.",
@@ -915,7 +1021,7 @@ fun FilesScreen() {
                                 VirtualFileSystem
                                     .renameDirectory(
                                         sourceName =
-                                            entry.name,
+                                            oldName,
 
                                         destinationName =
                                             newName
@@ -926,7 +1032,7 @@ fun FilesScreen() {
                                 VirtualFileSystem
                                     .moveFile(
                                         sourceName =
-                                            entry.name,
+                                            oldName,
 
                                         destinationName =
                                             newName
@@ -936,7 +1042,7 @@ fun FilesScreen() {
                         if (success) {
 
                             statusMessage =
-                                "Renamed ${entry.name} to $newName."
+                                "Renamed $oldName to $newName."
 
                         } else {
 
@@ -1154,13 +1260,6 @@ fun FilesScreen() {
                     "$currentPath/$sourceName"
                 }
 
-            /*
-             * Do not even offer:
-             *
-             * - current parent
-             * - the folder itself
-             * - any of its descendants
-             */
             val availableDestinations =
                 directoryPaths
                     .filter { destination ->
@@ -1251,8 +1350,8 @@ fun FilesScreen() {
 
                             atlasError =
                                 AtlasErrors
-                                    .directoryCycle(
-                                        sourceName
+                                    .filesystemOperationFailed(
+                                        "folder move"
                                     )
                         }
                     }
@@ -1438,10 +1537,9 @@ private fun FileEntryCard(
 
             Spacer(
                 modifier =
-                    Modifier
-                        .width(
-                            14.dp
-                        )
+                    Modifier.width(
+                        14.dp
+                    )
             )
 
             Column(
@@ -1681,10 +1779,9 @@ private fun DestinationPickerDialog(
 
                 Spacer(
                     modifier =
-                        Modifier
-                            .height(
-                                4.dp
-                            )
+                        Modifier.height(
+                            4.dp
+                        )
                 )
 
                 Text(
@@ -1704,10 +1801,9 @@ private fun DestinationPickerDialog(
 
                 Spacer(
                     modifier =
-                        Modifier
-                            .height(
-                                12.dp
-                            )
+                        Modifier.height(
+                            12.dp
+                        )
                 )
 
                 if (destinations.isEmpty()) {
@@ -1733,10 +1829,9 @@ private fun DestinationPickerDialog(
                                 ),
 
                         verticalArrangement =
-                            Arrangement
-                                .spacedBy(
-                                    4.dp
-                                )
+                            Arrangement.spacedBy(
+                                4.dp
+                            )
                     ) {
 
                         items(
@@ -1832,10 +1927,9 @@ private fun DestinationFolderRow(
 
             Spacer(
                 modifier =
-                    Modifier
-                        .width(
-                            (depth * 8).dp
-                        )
+                    Modifier.width(
+                        (depth * 8).dp
+                    )
             )
 
             Text(
@@ -1844,10 +1938,9 @@ private fun DestinationFolderRow(
 
             Spacer(
                 modifier =
-                    Modifier
-                        .width(
-                            10.dp
-                        )
+                    Modifier.width(
+                        10.dp
+                    )
             )
 
             Text(
@@ -1926,10 +2019,9 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        4.dp
-                    )
+                Modifier.height(
+                    4.dp
+                )
         )
 
         Text(
@@ -1953,10 +2045,9 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        16.dp
-                    )
+                Modifier.height(
+                    16.dp
+                )
         )
 
         if (editing) {
@@ -1967,10 +2058,9 @@ private fun AtlasFileViewer(
                         .fillMaxWidth(),
 
                 horizontalArrangement =
-                    Arrangement
-                        .spacedBy(
-                            8.dp
-                        )
+                    Arrangement.spacedBy(
+                        8.dp
+                    )
             ) {
 
                 Button(
@@ -2014,10 +2104,9 @@ private fun AtlasFileViewer(
                         .fillMaxWidth(),
 
                 horizontalArrangement =
-                    Arrangement
-                        .spacedBy(
-                            8.dp
-                        )
+                    Arrangement.spacedBy(
+                        8.dp
+                    )
             ) {
 
                 Button(
@@ -2056,10 +2145,9 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        16.dp
-                    )
+                Modifier.height(
+                    16.dp
+                )
         )
 
         Text(
@@ -2074,10 +2162,9 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        4.dp
-                    )
+                Modifier.height(
+                    4.dp
+                )
         )
 
         Text(
@@ -2104,10 +2191,9 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier
-                    .height(
-                        16.dp
-                    )
+                Modifier.height(
+                    16.dp
+                )
         )
 
         if (editing) {
@@ -2585,10 +2671,9 @@ private fun DeleteEntryDialog(
 
                     Spacer(
                         modifier =
-                            Modifier
-                                .height(
-                                    8.dp
-                                )
+                            Modifier.height(
+                                8.dp
+                            )
                     )
 
                     Text(

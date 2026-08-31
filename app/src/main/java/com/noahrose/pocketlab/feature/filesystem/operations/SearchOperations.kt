@@ -12,7 +12,15 @@ object SearchOperations {
         val target =
             name.trim()
 
-        if (target.isBlank()) {
+        /*
+         * Atlas search requires at least
+         * two characters.
+         *
+         * This keeps searches useful without
+         * returning nearly the entire filesystem
+         * for a single-letter query.
+         */
+        if (target.length < 2) {
             return emptyList()
         }
 
@@ -27,6 +35,9 @@ object SearchOperations {
         )
 
         return results
+            .sortedWith(
+                String.CASE_INSENSITIVE_ORDER
+            )
     }
 
     private fun searchDirectory(
@@ -36,33 +47,48 @@ object SearchOperations {
         results: MutableList<String>
     ) {
 
-        directory.children.forEach { child ->
+        directory.children
+            .forEach { child ->
 
-            val childPath =
-                if (currentPath == "~") {
-                    "~/${child.name}"
-                } else {
-                    "$currentPath/${child.name}"
+                val childPath =
+                    if (currentPath == "~") {
+                        "~/${child.name}"
+                    } else {
+                        "$currentPath/${child.name}"
+                    }
+
+                /*
+                 * Partial-name search.
+                 *
+                 * Examples:
+                 *
+                 * "te" -> test.txt
+                 * "pro" -> Projects
+                 * "txt" -> notes.txt
+                 *
+                 * Matching is case-insensitive.
+                 */
+                if (
+                    child.name.contains(
+                        other = target,
+                        ignoreCase = true
+                    )
+                ) {
+
+                    results.add(
+                        childPath
+                    )
                 }
 
-            if (
-                child.name.equals(
-                    target,
-                    ignoreCase = true
-                )
-            ) {
-                results.add(childPath)
-            }
+                if (child.isDirectory) {
 
-            if (child.isDirectory) {
-
-                searchDirectory(
-                    directory = child,
-                    currentPath = childPath,
-                    target = target,
-                    results = results
-                )
+                    searchDirectory(
+                        directory = child,
+                        currentPath = childPath,
+                        target = target,
+                        results = results
+                    )
+                }
             }
-        }
     }
 }
