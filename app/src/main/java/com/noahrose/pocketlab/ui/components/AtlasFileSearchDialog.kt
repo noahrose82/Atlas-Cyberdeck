@@ -1,5 +1,6 @@
 package com.noahrose.pocketlab.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -28,7 +29,8 @@ import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 
 @Composable
 fun AtlasFileSearchDialog(
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onResultSelected: (String) -> Unit
 ) {
 
     var searchText by
@@ -107,11 +109,6 @@ fun AtlasFileSearchDialog(
                         val query =
                             value.trim()
 
-                        /*
-                         * Live search begins as soon
-                         * as the user enters at least
-                         * two characters.
-                         */
                         results =
                             if (query.length >= 2) {
 
@@ -172,11 +169,6 @@ fun AtlasFileSearchDialog(
                     }
                 )
 
-                /*
-                 * ------------------------------------------------
-                 * LIVE RESULTS
-                 * ------------------------------------------------
-                 */
                 if (searchReady) {
 
                     Spacer(
@@ -242,7 +234,7 @@ fun AtlasFileSearchDialog(
 
                         Text(
                             text =
-                                "Matches containing \"$cleanSearch\"",
+                                "Tap a result to open it.",
 
                             style =
                                 MaterialTheme
@@ -282,7 +274,14 @@ fun AtlasFileSearchDialog(
 
                                 SearchResultRow(
                                     path =
-                                        path
+                                        path,
+
+                                    onClick = {
+
+                                        onResultSelected(
+                                            path
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -309,7 +308,8 @@ fun AtlasFileSearchDialog(
 
 @Composable
 private fun SearchResultRow(
-    path: String
+    path: String,
+    onClick: () -> Unit
 ) {
 
     val isDirectory =
@@ -329,6 +329,10 @@ private fun SearchResultRow(
                 .fillMaxWidth()
                 .padding(
                     vertical = 3.dp
+                )
+                .clickable(
+                    onClick =
+                        onClick
                 ),
 
         shape =
@@ -346,7 +350,7 @@ private fun SearchResultRow(
                     .fillMaxWidth()
                     .padding(
                         horizontal = 12.dp,
-                        vertical = 10.dp
+                        vertical = 12.dp
                     )
         ) {
 

@@ -153,6 +153,113 @@ fun FilesScreen() {
 
     /*
      * ------------------------------------------------
+     * DIRECT PATH NAVIGATION
+     * ------------------------------------------------
+     *
+     * Search results contain absolute Atlas VFS paths
+     * such as:
+     *
+     * ~/Projects/TestFolder
+     *
+     * The existing VFS navigation API works one folder
+     * at a time, so Atlas first returns to "~" and then
+     * walks each path segment.
+     */
+    fun navigateToAtlasDirectory(
+        path: String
+    ): Boolean {
+
+        val normalizedPath =
+            path
+                .trim()
+                .replace(
+                    '\\',
+                    '/'
+                )
+                .replace(
+                    Regex("/+"),
+                    "/"
+                )
+                .removeSuffix("/")
+
+        if (
+            normalizedPath != "~" &&
+            !normalizedPath.startsWith("~/")
+        ) {
+
+            return false
+        }
+
+        val originalPath =
+            currentPath
+
+        fun walkPath(
+            destinationPath: String
+        ): Boolean {
+
+            val returnedToRoot =
+                VirtualFileSystem
+                    .changeDirectory(
+                        "~"
+                    )
+
+            if (!returnedToRoot) {
+                return false
+            }
+
+            if (destinationPath == "~") {
+                return true
+            }
+
+            val segments =
+                destinationPath
+                    .removePrefix("~/")
+                    .split("/")
+                    .filter {
+                        it.isNotBlank()
+                    }
+
+            segments.forEach { segment ->
+
+                val changed =
+                    VirtualFileSystem
+                        .changeDirectory(
+                            segment
+                        )
+
+                if (!changed) {
+                    return false
+                }
+            }
+
+            return true
+        }
+
+        val success =
+            walkPath(
+                normalizedPath
+            )
+
+        /*
+         * A search result should normally always resolve
+         * because it came from this same VFS.
+         *
+         * If anything changed unexpectedly, restore the
+         * user's original location instead of leaving them
+         * halfway through a path.
+         */
+        if (!success) {
+
+            walkPath(
+                originalPath
+            )
+        }
+
+        return success
+    }
+
+    /*
+     * ------------------------------------------------
      * OPEN FILE
      * ------------------------------------------------
      */
@@ -386,11 +493,6 @@ fun FilesScreen() {
                 )
         )
 
-        /*
-         * ------------------------------------------------
-         * CURRENT LOCATION
-         * ------------------------------------------------
-         */
         Surface(
             modifier =
                 Modifier
@@ -407,10 +509,9 @@ fun FilesScreen() {
 
             Column(
                 modifier =
-                    Modifier
-                        .padding(
-                            14.dp
-                        )
+                    Modifier.padding(
+                        14.dp
+                    )
             ) {
 
                 Text(
@@ -462,15 +563,9 @@ fun FilesScreen() {
                 )
         )
 
-        /*
-         * ------------------------------------------------
-         * FILE ACTIONS
-         * ------------------------------------------------
-         */
         Row(
             modifier =
-                Modifier
-                    .fillMaxWidth(),
+                Modifier.fillMaxWidth(),
 
             horizontalArrangement =
                 Arrangement.spacedBy(
@@ -480,10 +575,9 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier
-                        .weight(
-                            1f
-                        ),
+                    Modifier.weight(
+                        1f
+                    ),
 
                 enabled =
                     currentPath != "~",
@@ -517,10 +611,9 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier
-                        .weight(
-                            1f
-                        ),
+                    Modifier.weight(
+                        1f
+                    ),
 
                 onClick = {
 
@@ -539,10 +632,9 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier
-                        .weight(
-                            1f
-                        ),
+                    Modifier.weight(
+                        1f
+                    ),
 
                 onClick = {
 
@@ -567,15 +659,9 @@ fun FilesScreen() {
                 )
         )
 
-        /*
-         * ------------------------------------------------
-         * SEARCH / TREE TOOLS
-         * ------------------------------------------------
-         */
         Row(
             modifier =
-                Modifier
-                    .fillMaxWidth(),
+                Modifier.fillMaxWidth(),
 
             horizontalArrangement =
                 Arrangement.spacedBy(
@@ -585,10 +671,9 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier
-                        .weight(
-                            1f
-                        ),
+                    Modifier.weight(
+                        1f
+                    ),
 
                 onClick = {
 
@@ -607,10 +692,9 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier
-                        .weight(
-                            1f
-                        ),
+                    Modifier.weight(
+                        1f
+                    ),
 
                 onClick = {
 
@@ -669,11 +753,6 @@ fun FilesScreen() {
                 )
         )
 
-        /*
-         * ------------------------------------------------
-         * DIRECTORY CONTENTS
-         * ------------------------------------------------
-         */
         if (sortedEntries.isEmpty()) {
 
             Column(
@@ -834,6 +913,80 @@ fun FilesScreen() {
 
                 showSearchDialog =
                     false
+            },
+
+            onResultSelected = { resultPath ->
+
+                val isDirectory =
+                    VirtualFileSystem
+                        .getDirectoryPaths()
+                        .any { directoryPath ->
+
+                            directoryPath.equals(
+                                resultPath,
+                                ignoreCase = true
+                            )
+                        }
+
+                /*
+                 * Close Search before navigating.
+                 */
+                showSearchDialog =
+                    false
+
+                if (isDirectory) {
+
+                    val navigated =
+                        navigateToAtlasDirectory(
+                            resultPath
+                        )
+
+                    if (!navigated) {
+
+                        atlasError =
+                            AtlasErrors
+                                .itemNotFound(
+                                    resultPath
+                                )
+                    }
+
+                } else {
+
+                    val fileName =
+                        resultPath
+                            .substringAfterLast("/")
+
+                    val parentPath =
+                        resultPath
+                            .substringBeforeLast(
+                                delimiter = "/",
+                                missingDelimiterValue = "~"
+                            )
+
+                    val navigated =
+                        navigateToAtlasDirectory(
+                            parentPath
+                        )
+
+                    if (navigated) {
+
+                        openFile(
+                            fileName =
+                                fileName,
+
+                            editImmediately =
+                                false
+                        )
+
+                    } else {
+
+                        atlasError =
+                            AtlasErrors
+                                .itemNotFound(
+                                    resultPath
+                                )
+                    }
+                }
             }
         )
     }
@@ -854,11 +1007,6 @@ fun FilesScreen() {
         )
     }
 
-    /*
-     * ------------------------------------------------
-     * CREATE FILE / FOLDER
-     * ------------------------------------------------
-     */
     createItemType
         ?.let { itemType ->
 
@@ -950,11 +1098,6 @@ fun FilesScreen() {
             )
         }
 
-    /*
-     * ------------------------------------------------
-     * RENAME FILE / DIRECTORY
-     * ------------------------------------------------
-     */
     renameEntry
         ?.let { entry ->
 
@@ -1060,11 +1203,6 @@ fun FilesScreen() {
             )
         }
 
-    /*
-     * ------------------------------------------------
-     * COPY FILE
-     * ------------------------------------------------
-     */
     copyFileName
         ?.let { sourceName ->
 
@@ -1151,11 +1289,6 @@ fun FilesScreen() {
             )
         }
 
-    /*
-     * ------------------------------------------------
-     * MOVE FILE
-     * ------------------------------------------------
-     */
     moveFileName
         ?.let { sourceName ->
 
@@ -1242,21 +1375,13 @@ fun FilesScreen() {
             )
         }
 
-    /*
-     * ------------------------------------------------
-     * MOVE DIRECTORY
-     * ------------------------------------------------
-     */
     moveDirectoryName
         ?.let { sourceName ->
 
             val sourcePath =
                 if (currentPath == "~") {
-
                     "~/$sourceName"
-
                 } else {
-
                     "$currentPath/$sourceName"
                 }
 
@@ -1362,11 +1487,6 @@ fun FilesScreen() {
             )
         }
 
-    /*
-     * ------------------------------------------------
-     * DETAILS
-     * ------------------------------------------------
-     */
     detailsEntry
         ?.let { entry ->
 
@@ -1385,11 +1505,6 @@ fun FilesScreen() {
             )
         }
 
-    /*
-     * ------------------------------------------------
-     * DELETE
-     * ------------------------------------------------
-     */
     deleteEntry
         ?.let { entry ->
 
@@ -1458,11 +1573,6 @@ fun FilesScreen() {
             )
         }
 
-    /*
-     * ------------------------------------------------
-     * CENTRAL ATLAS ERROR DIALOG
-     * ------------------------------------------------
-     */
     atlasError
         ?.let { error ->
 
@@ -1498,8 +1608,7 @@ private fun FileEntryCard(
 
     Card(
         modifier =
-            Modifier
-                .fillMaxWidth()
+            Modifier.fillMaxWidth()
     ) {
 
         Row(
@@ -1544,10 +1653,9 @@ private fun FileEntryCard(
 
             Column(
                 modifier =
-                    Modifier
-                        .weight(
-                            1f
-                        )
+                    Modifier.weight(
+                        1f
+                    )
             ) {
 
                 Text(
@@ -1753,18 +1861,14 @@ private fun DestinationPickerDialog(
             onDismiss,
 
         title = {
-
-            Text(
-                title
-            )
+            Text(title)
         },
 
         text = {
 
             Column(
                 modifier =
-                    Modifier
-                        .fillMaxWidth()
+                    Modifier.fillMaxWidth()
             ) {
 
                 Text(
@@ -1883,11 +1987,8 @@ private fun DestinationFolderRow(
 
     val depth =
         if (path == "~") {
-
             0
-
         } else {
-
             path
                 .removePrefix("~/")
                 .split("/")
@@ -1945,10 +2046,9 @@ private fun DestinationFolderRow(
 
             Text(
                 modifier =
-                    Modifier
-                        .weight(
-                            1f
-                        ),
+                    Modifier.weight(
+                        1f
+                    ),
 
                 text =
                     path,
@@ -2054,8 +2154,7 @@ private fun AtlasFileViewer(
 
             Row(
                 modifier =
-                    Modifier
-                        .fillMaxWidth(),
+                    Modifier.fillMaxWidth(),
 
                 horizontalArrangement =
                     Arrangement.spacedBy(
@@ -2065,10 +2164,9 @@ private fun AtlasFileViewer(
 
                 Button(
                     modifier =
-                        Modifier
-                            .weight(
-                                1f
-                            ),
+                        Modifier.weight(
+                            1f
+                        ),
 
                     onClick =
                         onCancelEdit
@@ -2081,10 +2179,9 @@ private fun AtlasFileViewer(
 
                 Button(
                     modifier =
-                        Modifier
-                            .weight(
-                                1f
-                            ),
+                        Modifier.weight(
+                            1f
+                        ),
 
                     onClick =
                         onSave
@@ -2100,8 +2197,7 @@ private fun AtlasFileViewer(
 
             Row(
                 modifier =
-                    Modifier
-                        .fillMaxWidth(),
+                    Modifier.fillMaxWidth(),
 
                 horizontalArrangement =
                     Arrangement.spacedBy(
@@ -2111,10 +2207,9 @@ private fun AtlasFileViewer(
 
                 Button(
                     modifier =
-                        Modifier
-                            .weight(
-                                1f
-                            ),
+                        Modifier.weight(
+                            1f
+                        ),
 
                     onClick =
                         onBack
@@ -2127,10 +2222,9 @@ private fun AtlasFileViewer(
 
                 Button(
                     modifier =
-                        Modifier
-                            .weight(
-                                1f
-                            ),
+                        Modifier.weight(
+                            1f
+                        ),
 
                     onClick =
                         onEdit
@@ -2316,8 +2410,7 @@ private fun CreateItemDialog(
 
             OutlinedTextField(
                 modifier =
-                    Modifier
-                        .fillMaxWidth(),
+                    Modifier.fillMaxWidth(),
 
                 value =
                     name,
@@ -2417,8 +2510,7 @@ private fun RenameEntryDialog(
 
             OutlinedTextField(
                 modifier =
-                    Modifier
-                        .fillMaxWidth(),
+                    Modifier.fillMaxWidth(),
 
                 value =
                     newName,
