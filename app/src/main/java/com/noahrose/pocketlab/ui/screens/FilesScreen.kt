@@ -44,6 +44,7 @@ import com.noahrose.pocketlab.feature.filesystem.FileNode
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.system.error.AtlasError
 import com.noahrose.pocketlab.feature.system.error.AtlasErrors
+import com.noahrose.pocketlab.ui.components.AtlasBreadcrumbBar
 import com.noahrose.pocketlab.ui.components.AtlasErrorDialog
 import com.noahrose.pocketlab.ui.components.AtlasFileSearchDialog
 import com.noahrose.pocketlab.ui.components.AtlasFileTreeDialog
@@ -155,15 +156,6 @@ fun FilesScreen() {
      * ------------------------------------------------
      * DIRECT PATH NAVIGATION
      * ------------------------------------------------
-     *
-     * Search results contain absolute Atlas VFS paths
-     * such as:
-     *
-     * ~/Projects/TestFolder
-     *
-     * The existing VFS navigation API works one folder
-     * at a time, so Atlas first returns to "~" and then
-     * walks each path segment.
      */
     fun navigateToAtlasDirectory(
         path: String
@@ -186,7 +178,6 @@ fun FilesScreen() {
             normalizedPath != "~" &&
             !normalizedPath.startsWith("~/")
         ) {
-
             return false
         }
 
@@ -241,12 +232,8 @@ fun FilesScreen() {
             )
 
         /*
-         * A search result should normally always resolve
-         * because it came from this same VFS.
-         *
-         * If anything changed unexpectedly, restore the
-         * user's original location instead of leaving them
-         * halfway through a path.
+         * Never strand the user halfway through
+         * a failed path navigation.
          */
         if (!success) {
 
@@ -416,7 +403,7 @@ fun FilesScreen() {
 
     /*
      * ------------------------------------------------
-     * DIRECTORY BACK
+     * ANDROID BACK
      * ------------------------------------------------
      */
     if (currentPath != "~") {
@@ -493,10 +480,14 @@ fun FilesScreen() {
                 )
         )
 
+        /*
+         * ------------------------------------------------
+         * BREADCRUMB LOCATION
+         * ------------------------------------------------
+         */
         Surface(
             modifier =
-                Modifier
-                    .fillMaxWidth(),
+                Modifier.fillMaxWidth(),
 
             shape =
                 MaterialTheme
@@ -510,13 +501,19 @@ fun FilesScreen() {
             Column(
                 modifier =
                     Modifier.padding(
-                        14.dp
+                        horizontal = 10.dp,
+                        vertical = 10.dp
                     )
             ) {
 
                 Text(
                     text =
                         "Current Location",
+
+                    modifier =
+                        Modifier.padding(
+                            horizontal = 4.dp
+                        ),
 
                     style =
                         MaterialTheme
@@ -532,26 +529,34 @@ fun FilesScreen() {
                 Spacer(
                     modifier =
                         Modifier.height(
-                            4.dp
+                            2.dp
                         )
                 )
 
-                Text(
-                    text =
+                AtlasBreadcrumbBar(
+                    currentPath =
                         currentPath,
 
-                    style =
-                        MaterialTheme
-                            .typography
-                            .bodyLarge,
+                    onPathSelected = {
+                            destinationPath ->
 
-                    fontFamily =
-                        FontFamily.Monospace,
+                        statusMessage =
+                            null
 
-                    color =
-                        MaterialTheme
-                            .colorScheme
-                            .primary
+                        val navigated =
+                            navigateToAtlasDirectory(
+                                destinationPath
+                            )
+
+                        if (!navigated) {
+
+                            atlasError =
+                                AtlasErrors
+                                    .itemNotFound(
+                                        destinationPath
+                                    )
+                        }
+                    }
                 )
             }
         }
@@ -563,6 +568,11 @@ fun FilesScreen() {
                 )
         )
 
+        /*
+         * ------------------------------------------------
+         * FILE ACTIONS
+         * ------------------------------------------------
+         */
         Row(
             modifier =
                 Modifier.fillMaxWidth(),
@@ -659,6 +669,11 @@ fun FilesScreen() {
                 )
         )
 
+        /*
+         * ------------------------------------------------
+         * SEARCH / TREE
+         * ------------------------------------------------
+         */
         Row(
             modifier =
                 Modifier.fillMaxWidth(),
@@ -753,6 +768,11 @@ fun FilesScreen() {
                 )
         )
 
+        /*
+         * ------------------------------------------------
+         * DIRECTORY CONTENTS
+         * ------------------------------------------------
+         */
         if (sortedEntries.isEmpty()) {
 
             Column(
@@ -928,9 +948,6 @@ fun FilesScreen() {
                             )
                         }
 
-                /*
-                 * Close Search before navigating.
-                 */
                 showSearchDialog =
                     false
 
@@ -1007,6 +1024,11 @@ fun FilesScreen() {
         )
     }
 
+    /*
+     * ------------------------------------------------
+     * CREATE
+     * ------------------------------------------------
+     */
     createItemType
         ?.let { itemType ->
 
@@ -1098,6 +1120,11 @@ fun FilesScreen() {
             )
         }
 
+    /*
+     * ------------------------------------------------
+     * RENAME
+     * ------------------------------------------------
+     */
     renameEntry
         ?.let { entry ->
 
@@ -1203,6 +1230,11 @@ fun FilesScreen() {
             )
         }
 
+    /*
+     * ------------------------------------------------
+     * COPY FILE
+     * ------------------------------------------------
+     */
     copyFileName
         ?.let { sourceName ->
 
@@ -1289,6 +1321,11 @@ fun FilesScreen() {
             )
         }
 
+    /*
+     * ------------------------------------------------
+     * MOVE FILE
+     * ------------------------------------------------
+     */
     moveFileName
         ?.let { sourceName ->
 
@@ -1375,6 +1412,11 @@ fun FilesScreen() {
             )
         }
 
+    /*
+     * ------------------------------------------------
+     * MOVE DIRECTORY
+     * ------------------------------------------------
+     */
     moveDirectoryName
         ?.let { sourceName ->
 
@@ -1487,6 +1529,11 @@ fun FilesScreen() {
             )
         }
 
+    /*
+     * ------------------------------------------------
+     * DETAILS
+     * ------------------------------------------------
+     */
     detailsEntry
         ?.let { entry ->
 
@@ -1505,6 +1552,11 @@ fun FilesScreen() {
             )
         }
 
+    /*
+     * ------------------------------------------------
+     * DELETE
+     * ------------------------------------------------
+     */
     deleteEntry
         ?.let { entry ->
 
@@ -1573,6 +1625,11 @@ fun FilesScreen() {
             )
         }
 
+    /*
+     * ------------------------------------------------
+     * ERROR
+     * ------------------------------------------------
+     */
     atlasError
         ?.let { error ->
 
@@ -1861,7 +1918,10 @@ private fun DestinationPickerDialog(
             onDismiss,
 
         title = {
-            Text(title)
+
+            Text(
+                title
+            )
         },
 
         text = {
