@@ -43,12 +43,13 @@ data class AtlasError(
                     "Try:"
                 )
 
-                nextSteps.forEach { step ->
+                nextSteps
+                    .forEach { step ->
 
-                    appendLine(
-                        "• $step"
-                    )
-                }
+                        appendLine(
+                            "• $step"
+                        )
+                    }
             }
 
             appendLine()
@@ -122,6 +123,92 @@ object AtlasErrors {
         )
     }
 
+    fun duplicateImport(
+        fileName: String,
+        destinationPath: String
+    ): AtlasError {
+
+        return AtlasError(
+            code =
+                "ATLAS-FS-409-DUPLICATE",
+
+            title =
+                "Import Blocked",
+
+            whatHappened =
+                "Atlas could not import \"$fileName\" into $destinationPath.",
+
+            whyItHappened =
+                "An item named \"$fileName\" already exists in that folder.",
+
+            dataImpact =
+                "The existing Atlas item was not changed or overwritten. The Android source file was not changed.",
+
+            nextSteps =
+                listOf(
+                    "Rename the existing Atlas item.",
+                    "Rename the Android file before importing it.",
+                    "Import the file into another Atlas folder."
+                )
+        )
+    }
+
+    fun importReadFailed(): AtlasError {
+
+        return AtlasError(
+            code =
+                "ATLAS-FS-422-IMPORT-READ",
+
+            title =
+                "Import Failed",
+
+            whatHappened =
+                "Atlas could not import the selected Android file.",
+
+            whyItHappened =
+                "Atlas could not read the selected file as a supported text document.",
+
+            dataImpact =
+                "Nothing was created or changed in Atlas. The Android source file was not changed.",
+
+            nextSteps =
+                listOf(
+                    "Choose a text-based file.",
+                    "Confirm the file is still available on the device.",
+                    "Try selecting the file again."
+                )
+        )
+    }
+
+    fun importCreateFailed(
+        fileName: String
+    ): AtlasError {
+
+        return AtlasError(
+            code =
+                "ATLAS-FS-500-IMPORT-CREATE",
+
+            title =
+                "Import Failed",
+
+            whatHappened =
+                "Atlas read \"$fileName\" but could not create the Atlas file.",
+
+            whyItHappened =
+                "The filesystem could not complete the import operation.",
+
+            dataImpact =
+                "The Android source file was not changed. Atlas could not confirm that the imported file was created successfully.",
+
+            nextSteps =
+                listOf(
+                    "Check the current Atlas folder.",
+                    "Try the import again.",
+                    "Use the error code when reporting the problem if it continues."
+                )
+        )
+    }
+
     fun directoryNotEmpty(
         directoryName: String
     ): AtlasError {
@@ -166,8 +253,7 @@ object AtlasErrors {
                 "Atlas could not move \"$directoryName\".",
 
             whyItHappened =
-                "The selected destination is inside \"$directoryName\". " +
-                        "A folder cannot be moved inside itself or one of its own subfolders.",
+                "The selected destination is inside \"$directoryName\". A folder cannot be moved inside itself or one of its own subfolders.",
 
             dataImpact =
                 "No files or folders were changed.",

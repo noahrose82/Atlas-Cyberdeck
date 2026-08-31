@@ -46,6 +46,8 @@ import com.noahrose.pocketlab.feature.system.error.AtlasError
 import com.noahrose.pocketlab.feature.system.error.AtlasErrors
 import com.noahrose.pocketlab.ui.components.AtlasBreadcrumbBar
 import com.noahrose.pocketlab.ui.components.AtlasErrorDialog
+import com.noahrose.pocketlab.ui.components.AtlasFileExportButton
+import com.noahrose.pocketlab.ui.components.AtlasFileImportButton
 import com.noahrose.pocketlab.ui.components.AtlasFileSearchDialog
 import com.noahrose.pocketlab.ui.components.AtlasFileTreeDialog
 
@@ -64,16 +66,12 @@ fun FilesScreen() {
 
     var createItemType by
     remember {
-        mutableStateOf<CreateItemType?>(
-            null
-        )
+        mutableStateOf<CreateItemType?>(null)
     }
 
     var selectedFileName by
     remember {
-        mutableStateOf<String?>(
-            null
-        )
+        mutableStateOf<String?>(null)
     }
 
     var selectedFileContent by
@@ -88,58 +86,42 @@ fun FilesScreen() {
 
     var statusMessage by
     remember {
-        mutableStateOf<String?>(
-            null
-        )
+        mutableStateOf<String?>(null)
     }
 
     var atlasError by
     remember {
-        mutableStateOf<AtlasError?>(
-            null
-        )
+        mutableStateOf<AtlasError?>(null)
     }
 
     var renameEntry by
     remember {
-        mutableStateOf<FileNode?>(
-            null
-        )
+        mutableStateOf<FileNode?>(null)
     }
 
     var copyFileName by
     remember {
-        mutableStateOf<String?>(
-            null
-        )
+        mutableStateOf<String?>(null)
     }
 
     var moveFileName by
     remember {
-        mutableStateOf<String?>(
-            null
-        )
+        mutableStateOf<String?>(null)
     }
 
     var moveDirectoryName by
     remember {
-        mutableStateOf<String?>(
-            null
-        )
+        mutableStateOf<String?>(null)
     }
 
     var detailsEntry by
     remember {
-        mutableStateOf<FileNode?>(
-            null
-        )
+        mutableStateOf<FileNode?>(null)
     }
 
     var deleteEntry by
     remember {
-        mutableStateOf<FileNode?>(
-            null
-        )
+        mutableStateOf<FileNode?>(null)
     }
 
     var showSearchDialog by
@@ -164,10 +146,7 @@ fun FilesScreen() {
         val normalizedPath =
             path
                 .trim()
-                .replace(
-                    '\\',
-                    '/'
-                )
+                .replace('\\', '/')
                 .replace(
                     Regex("/+"),
                     "/"
@@ -190,9 +169,7 @@ fun FilesScreen() {
 
             val returnedToRoot =
                 VirtualFileSystem
-                    .changeDirectory(
-                        "~"
-                    )
+                    .changeDirectory("~")
 
             if (!returnedToRoot) {
                 return false
@@ -214,9 +191,7 @@ fun FilesScreen() {
 
                 val changed =
                     VirtualFileSystem
-                        .changeDirectory(
-                            segment
-                        )
+                        .changeDirectory(segment)
 
                 if (!changed) {
                     return false
@@ -231,12 +206,12 @@ fun FilesScreen() {
                 normalizedPath
             )
 
-        /*
-         * Never strand the user halfway through
-         * a failed path navigation.
-         */
         if (!success) {
 
+            /*
+             * Restore the user's original directory
+             * if direct navigation fails.
+             */
             walkPath(
                 originalPath
             )
@@ -385,6 +360,34 @@ fun FilesScreen() {
                 }
             },
 
+            onExportFailed = {
+
+                atlasError =
+                    AtlasError(
+                        code =
+                            "ATLAS-FS-500-EXPORT-WRITE",
+
+                        title =
+                            "Export Failed",
+
+                        whatHappened =
+                            "Atlas could not export \"$fileName\" to Android storage.",
+
+                        whyItHappened =
+                            "Android did not allow Atlas to complete writing the selected destination file.",
+
+                        dataImpact =
+                            "The original Atlas file was not changed or deleted.",
+
+                        nextSteps =
+                            listOf(
+                                "Choose another Android save location.",
+                                "Confirm the destination is still available.",
+                                "Try exporting the file again."
+                            )
+                    )
+            },
+
             onBack = {
 
                 selectedFileName =
@@ -397,6 +400,25 @@ fun FilesScreen() {
                     false
             }
         )
+
+        /*
+         * Errors raised while the file viewer is
+         * open must still be rendered before this
+         * composable returns.
+         */
+        atlasError
+            ?.let { error ->
+
+                AtlasErrorDialog(
+                    error =
+                        error,
+
+                    onDismiss = {
+                        atlasError =
+                            null
+                    }
+                )
+            }
 
         return
     }
@@ -453,9 +475,7 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier.height(
-                    4.dp
-                )
+                Modifier.height(4.dp)
         )
 
         Text(
@@ -475,9 +495,7 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier.height(
-                    16.dp
-                )
+                Modifier.height(16.dp)
         )
 
         /*
@@ -487,7 +505,8 @@ fun FilesScreen() {
          */
         Surface(
             modifier =
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth(),
 
             shape =
                 MaterialTheme
@@ -528,9 +547,7 @@ fun FilesScreen() {
 
                 Spacer(
                     modifier =
-                        Modifier.height(
-                            2.dp
-                        )
+                        Modifier.height(2.dp)
                 )
 
                 AtlasBreadcrumbBar(
@@ -563,31 +580,27 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier.height(
-                    12.dp
-                )
+                Modifier.height(12.dp)
         )
 
         /*
          * ------------------------------------------------
-         * FILE ACTIONS
+         * CREATE / UP
          * ------------------------------------------------
          */
         Row(
             modifier =
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth(),
 
             horizontalArrangement =
-                Arrangement.spacedBy(
-                    8.dp
-                )
+                Arrangement
+                    .spacedBy(8.dp)
         ) {
 
             Button(
                 modifier =
-                    Modifier.weight(
-                        1f
-                    ),
+                    Modifier.weight(1f),
 
                 enabled =
                     currentPath != "~",
@@ -621,9 +634,7 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier.weight(
-                        1f
-                    ),
+                    Modifier.weight(1f),
 
                 onClick = {
 
@@ -642,9 +653,7 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier.weight(
-                        1f
-                    ),
+                    Modifier.weight(1f),
 
                 onClick = {
 
@@ -664,31 +673,27 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier.height(
-                    8.dp
-                )
+                Modifier.height(8.dp)
         )
 
         /*
          * ------------------------------------------------
-         * SEARCH / TREE
+         * SEARCH / TREE / IMPORT
          * ------------------------------------------------
          */
         Row(
             modifier =
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth(),
 
             horizontalArrangement =
-                Arrangement.spacedBy(
-                    8.dp
-                )
+                Arrangement
+                    .spacedBy(8.dp)
         ) {
 
             Button(
                 modifier =
-                    Modifier.weight(
-                        1f
-                    ),
+                    Modifier.weight(1f),
 
                 onClick = {
 
@@ -707,9 +712,7 @@ fun FilesScreen() {
 
             Button(
                 modifier =
-                    Modifier.weight(
-                        1f
-                    ),
+                    Modifier.weight(1f),
 
                 onClick = {
 
@@ -722,18 +725,112 @@ fun FilesScreen() {
             ) {
 
                 Text(
-                    "Tree View"
+                    "Tree"
                 )
             }
+
+            AtlasFileImportButton(
+                modifier =
+                    Modifier.weight(1f),
+
+                onFileImported = {
+                        fileName,
+                        content ->
+
+                    statusMessage =
+                        null
+
+                    val duplicateExists =
+                        currentEntries.any { entry ->
+
+                            entry.name.equals(
+                                fileName,
+                                ignoreCase = true
+                            )
+                        }
+
+                    if (duplicateExists) {
+
+                        atlasError =
+                            AtlasErrors
+                                .duplicateImport(
+                                    fileName =
+                                        fileName,
+
+                                    destinationPath =
+                                        currentPath
+                                )
+
+                    } else {
+
+                        val created =
+                            VirtualFileSystem
+                                .createFile(
+                                    fileName
+                                )
+
+                        if (!created) {
+
+                            atlasError =
+                                AtlasErrors
+                                    .importCreateFailed(
+                                        fileName
+                                    )
+
+                        } else {
+
+                            val written =
+                                VirtualFileSystem
+                                    .writeFile(
+                                        name =
+                                            fileName,
+
+                                        content =
+                                            content
+                                    )
+
+                            if (written) {
+
+                                statusMessage =
+                                    "Imported $fileName into $currentPath."
+
+                            } else {
+
+                                /*
+                                 * Best-effort rollback.
+                                 */
+                                VirtualFileSystem
+                                    .deleteFile(
+                                        fileName
+                                    )
+
+                                atlasError =
+                                    AtlasErrors
+                                        .importCreateFailed(
+                                            fileName
+                                        )
+                            }
+                        }
+                    }
+                },
+
+                onImportFailed = {
+
+                    statusMessage =
+                        null
+
+                    atlasError =
+                        AtlasErrors
+                            .importReadFailed()
+                }
+            )
         }
 
         if (statusMessage != null) {
 
             Spacer(
                 modifier =
-                    Modifier.height(
-                        10.dp
-                    )
+                    Modifier.height(10.dp)
             )
 
             Text(
@@ -754,18 +851,14 @@ fun FilesScreen() {
 
         Spacer(
             modifier =
-                Modifier.height(
-                    16.dp
-                )
+                Modifier.height(16.dp)
         )
 
         HorizontalDivider()
 
         Spacer(
             modifier =
-                Modifier.height(
-                    8.dp
-                )
+                Modifier.height(8.dp)
         )
 
         /*
@@ -809,14 +902,11 @@ fun FilesScreen() {
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .weight(
-                            1f
-                        ),
+                        .weight(1f),
 
                 verticalArrangement =
-                    Arrangement.spacedBy(
-                        8.dp
-                    )
+                    Arrangement
+                        .spacedBy(8.dp)
             ) {
 
                 items(
@@ -935,7 +1025,8 @@ fun FilesScreen() {
                     false
             },
 
-            onResultSelected = { resultPath ->
+            onResultSelected = {
+                    resultPath ->
 
                 val isDirectory =
                     VirtualFileSystem
@@ -1010,7 +1101,7 @@ fun FilesScreen() {
 
     /*
      * ------------------------------------------------
-     * TREE VIEW
+     * TREE
      * ------------------------------------------------
      */
     if (showTreeDialog) {
@@ -1037,11 +1128,13 @@ fun FilesScreen() {
                     itemType,
 
                 onDismiss = {
+
                     createItemType =
                         null
                 },
 
-                onCreate = { name ->
+                onCreate = {
+                        name ->
 
                     if (name.isBlank()) {
 
@@ -1082,8 +1175,11 @@ fun FilesScreen() {
                                 itemType ==
                                 CreateItemType.FILE
                             ) {
+
                                 "Created file: $name"
+
                             } else {
+
                                 "Created folder: $name"
                             }
 
@@ -1138,21 +1234,21 @@ fun FilesScreen() {
                         null
                 },
 
-                onRename = { newName ->
+                onRename = {
+                        newName ->
 
                     val oldName =
                         entry.name
 
                     val duplicateExists =
-                        currentEntries
-                            .any { existing ->
+                        currentEntries.any { existing ->
 
-                                existing !== entry &&
-                                        existing.name.equals(
-                                            newName,
-                                            ignoreCase = true
-                                        )
-                            }
+                            existing !== entry &&
+                                    existing.name.equals(
+                                        newName,
+                                        ignoreCase = true
+                                    )
+                        }
 
                     if (duplicateExists) {
 
@@ -1414,7 +1510,7 @@ fun FilesScreen() {
 
     /*
      * ------------------------------------------------
-     * MOVE DIRECTORY
+     * MOVE FOLDER
      * ------------------------------------------------
      */
     moveDirectoryName
@@ -1422,8 +1518,11 @@ fun FilesScreen() {
 
             val sourcePath =
                 if (currentPath == "~") {
+
                     "~/$sourceName"
+
                 } else {
+
                     "$currentPath/$sourceName"
                 }
 
@@ -1627,7 +1726,7 @@ fun FilesScreen() {
 
     /*
      * ------------------------------------------------
-     * ERROR
+     * CENTRAL ERROR DIALOG
      * ------------------------------------------------
      */
     atlasError
@@ -1703,16 +1802,12 @@ private fun FileEntryCard(
 
             Spacer(
                 modifier =
-                    Modifier.width(
-                        14.dp
-                    )
+                    Modifier.width(14.dp)
             )
 
             Column(
                 modifier =
-                    Modifier.weight(
-                        1f
-                    )
+                    Modifier.weight(1f)
             ) {
 
                 Text(
@@ -1943,9 +2038,7 @@ private fun DestinationPickerDialog(
 
                 Spacer(
                     modifier =
-                        Modifier.height(
-                            4.dp
-                        )
+                        Modifier.height(4.dp)
                 )
 
                 Text(
@@ -1965,9 +2058,7 @@ private fun DestinationPickerDialog(
 
                 Spacer(
                     modifier =
-                        Modifier.height(
-                            12.dp
-                        )
+                        Modifier.height(12.dp)
                 )
 
                 if (destinations.isEmpty()) {
@@ -1993,9 +2084,8 @@ private fun DestinationPickerDialog(
                                 ),
 
                         verticalArrangement =
-                            Arrangement.spacedBy(
-                                4.dp
-                            )
+                            Arrangement
+                                .spacedBy(4.dp)
                     ) {
 
                         items(
@@ -2047,8 +2137,11 @@ private fun DestinationFolderRow(
 
     val depth =
         if (path == "~") {
+
             0
+
         } else {
+
             path
                 .removePrefix("~/")
                 .split("/")
@@ -2099,16 +2192,12 @@ private fun DestinationFolderRow(
 
             Spacer(
                 modifier =
-                    Modifier.width(
-                        10.dp
-                    )
+                    Modifier.width(10.dp)
             )
 
             Text(
                 modifier =
-                    Modifier.weight(
-                        1f
-                    ),
+                    Modifier.weight(1f),
 
                 text =
                     path,
@@ -2151,6 +2240,7 @@ private fun AtlasFileViewer(
     onEdit: () -> Unit,
     onCancelEdit: () -> Unit,
     onSave: () -> Unit,
+    onExportFailed: () -> Unit,
     onBack: () -> Unit
 ) {
 
@@ -2179,9 +2269,7 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier.height(
-                    4.dp
-                )
+                Modifier.height(4.dp)
         )
 
         Text(
@@ -2205,9 +2293,7 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier.height(
-                    16.dp
-                )
+                Modifier.height(16.dp)
         )
 
         if (editing) {
@@ -2217,16 +2303,13 @@ private fun AtlasFileViewer(
                     Modifier.fillMaxWidth(),
 
                 horizontalArrangement =
-                    Arrangement.spacedBy(
-                        8.dp
-                    )
+                    Arrangement
+                        .spacedBy(8.dp)
             ) {
 
                 Button(
                     modifier =
-                        Modifier.weight(
-                            1f
-                        ),
+                        Modifier.weight(1f),
 
                     onClick =
                         onCancelEdit
@@ -2239,9 +2322,7 @@ private fun AtlasFileViewer(
 
                 Button(
                     modifier =
-                        Modifier.weight(
-                            1f
-                        ),
+                        Modifier.weight(1f),
 
                     onClick =
                         onSave
@@ -2260,16 +2341,13 @@ private fun AtlasFileViewer(
                     Modifier.fillMaxWidth(),
 
                 horizontalArrangement =
-                    Arrangement.spacedBy(
-                        8.dp
-                    )
+                    Arrangement
+                        .spacedBy(8.dp)
             ) {
 
                 Button(
                     modifier =
-                        Modifier.weight(
-                            1f
-                        ),
+                        Modifier.weight(1f),
 
                     onClick =
                         onBack
@@ -2282,9 +2360,7 @@ private fun AtlasFileViewer(
 
                 Button(
                     modifier =
-                        Modifier.weight(
-                            1f
-                        ),
+                        Modifier.weight(1f),
 
                     onClick =
                         onEdit
@@ -2294,14 +2370,34 @@ private fun AtlasFileViewer(
                         "Edit"
                     )
                 }
+
+                AtlasFileExportButton(
+                    fileName =
+                        fileName,
+
+                    content =
+                        fileContent,
+
+                    modifier =
+                        Modifier.weight(1f),
+
+                    onExported = {
+                        /*
+                         * Successful return from the
+                         * Android document picker means
+                         * the export completed.
+                         */
+                    },
+
+                    onExportFailed =
+                        onExportFailed
+                )
             }
         }
 
         Spacer(
             modifier =
-                Modifier.height(
-                    16.dp
-                )
+                Modifier.height(16.dp)
         )
 
         Text(
@@ -2316,9 +2412,7 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier.height(
-                    4.dp
-                )
+                Modifier.height(4.dp)
         )
 
         Text(
@@ -2345,9 +2439,7 @@ private fun AtlasFileViewer(
 
         Spacer(
             modifier =
-                Modifier.height(
-                    16.dp
-                )
+                Modifier.height(16.dp)
         )
 
         if (editing) {
@@ -2356,9 +2448,7 @@ private fun AtlasFileViewer(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .weight(
-                            1f
-                        ),
+                        .weight(1f),
 
                 value =
                     fileContent,
@@ -2389,9 +2479,7 @@ private fun AtlasFileViewer(
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .weight(
-                            1f
-                        ),
+                        .weight(1f),
 
                 shape =
                     MaterialTheme
@@ -2414,10 +2502,8 @@ private fun AtlasFileViewer(
                             ),
 
                     text =
-                        if (fileContent.isEmpty()) {
+                        fileContent.ifEmpty {
                             "<empty file>"
-                        } else {
-                            fileContent
                         },
 
                     style =
@@ -2823,9 +2909,7 @@ private fun DeleteEntryDialog(
 
                     Spacer(
                         modifier =
-                            Modifier.height(
-                                8.dp
-                            )
+                            Modifier.height(8.dp)
                     )
 
                     Text(
