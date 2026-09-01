@@ -9,6 +9,30 @@ object LinuxInteractiveProotProcessSpecFactory {
         24
 
     /*
+     * ------------------------------------------------
+     * INTERACTIVE PTY CONTROL FILE
+     * ------------------------------------------------
+     *
+     * `script` allocates the real PTY inside Ubuntu.
+     *
+     * Android does not own that PTY descriptor directly,
+     * so the interactive child publishes its slave TTY
+     * path here before exec'ing nano or vim.
+     *
+     * Example:
+     *
+     *     /dev/pts/3
+     *
+     * Only one Atlas interactive session may exist at a
+     * time, so one transient control file is sufficient.
+     *
+     * This is runtime metadata only.
+     * It contains no user document data.
+     */
+    const val PTY_CONTROL_FILE =
+        "/tmp/.atlas-interactive-pty"
+
+    /*
      * Build a dedicated PRoot process specification for
      * an interactive Ubuntu application.
      *
@@ -64,14 +88,14 @@ object LinuxInteractiveProotProcessSpecFactory {
         }
 
         /*
-         * Start from the exact same validated PRoot
+         * Start from the exact validated PRoot
          * configuration used by the persistent Ubuntu
          * runtime.
          *
          * This preserves:
          *
          *     rootfs
-         *     --link2symlink
+         *     link2symlink
          *     .l2s
          *     /dev
          *     /proc
@@ -79,8 +103,6 @@ object LinuxInteractiveProotProcessSpecFactory {
          *     environment
          *     loader
          *     Android runtime bindings
-         *
-         * We only replace the final guest command.
          */
         val baseResult =
             LinuxProotProcessSpecFactory
@@ -108,12 +130,7 @@ object LinuxInteractiveProotProcessSpecFactory {
          *
          *     /bin/sh
          *
-         * That shell is appropriate for Atlas' persistent
-         * command bridge but not for a dedicated interactive
-         * application.
-         *
-         * Fail closed if that contract ever changes instead
-         * of silently constructing a malformed PRoot command.
+         * Fail closed if that contract changes.
          */
         if (
             baseSpec.arguments.isEmpty() ||
@@ -138,30 +155,128 @@ object LinuxInteractiveProotProcessSpecFactory {
                 .toMutableList()
 
         /*
-         * `script` creates a real pseudo-terminal under
-         * /dev/pts.
+         * ------------------------------------------------
+         * INTERACTIVE CHILD WRAPPER
+         * ------------------------------------------------
          *
-         * The command supplied through -c executes inside
-         * that PTY.
+         * This command executes INSIDE the PTY created by
+         * `script`.
          *
-         * `-q`
-         *     quiet mode
+         * Sequence:
          *
-         * `-e`
-         *     return the child application's exit status
+         * 1. Remove stale PTY metadata.
          *
-         * `-f`
-         *     flush output immediately
+         * 2. Ask Ubuntu which PTY device belongs to this
+         *    interactive shell.
          *
-         * /dev/null
-         *     prevents creation of a typescript file
+         * 3. Validate that the returned path is a numeric
+         *    entry under /dev/pts.
          *
-         * stty establishes a predictable initial terminal
-         * size before the application starts.
+         * 4. Store the path in Atlas' transient control
+         *    file.
+         *
+         * 5. Establish the initial rows and columns.
+         *
+         * 6. Replace the wrapper shell with nano, vim,
+         *    or another interactive application.
+         *
+         * The same PTY survives the final exec.
          */
         val interactiveCommand =
             buildString {
 
+                /*
+                 * Never allow stale PTY identity from an
+                 * earlier interrupted session to become
+                 * authoritative.
+                 */
+                append(
+                    "rm -f "
+                )
+
+                append(
+                    PTY_CONTROL_FILE
+                )
+
+                append(
+                    "; "
+                )
+
+                /*
+                 * Capture the PTY allocated by `script`.
+                 */
+                append(
+                    "ATLAS_PTY=\$(/usr/bin/tty 2>/dev/null) || exit 70; "
+                )
+
+                /*
+                 * Require a device beneath /dev/pts.
+                 */
+                append(
+                    "case \"\$ATLAS_PTY\" in "
+                )
+
+                append(
+                    "/dev/pts/*) "
+                )
+
+                append(
+                    "ATLAS_PTY_NUMBER=\"\${ATLAS_PTY#/dev/pts/}\" "
+                )
+
+                append(
+                    ";; "
+                )
+
+                append(
+                    "*) exit 71 ;; "
+                )
+
+                append(
+                    "esac; "
+                )
+
+                /*
+                 * Require the PTY identifier itself to be
+                 * numeric.
+                 */
+                append(
+                    "case \"\$ATLAS_PTY_NUMBER\" in "
+                )
+
+                append(
+                    "''|*[!0-9]*) exit 71 ;; "
+                )
+
+                append(
+                    "esac; "
+                )
+
+                /*
+                 * Restrict metadata permissions.
+                 */
+                append(
+                    "umask 077; "
+                )
+
+                /*
+                 * Publish only the validated PTY path.
+                 */
+                append(
+                    "printf '%s\\n' \"\$ATLAS_PTY\" > "
+                )
+
+                append(
+                    PTY_CONTROL_FILE
+                )
+
+                append(
+                    " || exit 72; "
+                )
+
+                /*
+                 * Establish initial terminal geometry.
+                 */
                 append(
                     "stty rows "
                 )
@@ -179,9 +294,13 @@ object LinuxInteractiveProotProcessSpecFactory {
                 )
 
                 append(
-                    " >/dev/null 2>&1; "
+                    " >/dev/null 2>&1 || exit 73; "
                 )
 
+                /*
+                 * Replace this temporary shell while
+                 * retaining the same PTY.
+                 */
                 append(
                     "exec "
                 )
@@ -191,28 +310,29 @@ object LinuxInteractiveProotProcessSpecFactory {
                 )
             }
 
-        interactiveArguments.add(
-            "/usr/bin/script"
-        )
+        interactiveArguments
+            .add(
+                "/usr/bin/script"
+            )
 
-        interactiveArguments.add(
-            "-qefc"
-        )
+        interactiveArguments
+            .add(
+                "-qefc"
+            )
 
         /*
-         * ProcessBuilder passes this as one argv value.
-         *
-         * No extra Android-side shell quoting is required.
-         * `script` itself passes the command to the Ubuntu
-         * shell attached to the PTY.
+         * ProcessBuilder passes this complete command as
+         * one argv value to `script`.
          */
-        interactiveArguments.add(
-            interactiveCommand
-        )
+        interactiveArguments
+            .add(
+                interactiveCommand
+            )
 
-        interactiveArguments.add(
-            "/dev/null"
-        )
+        interactiveArguments
+            .add(
+                "/dev/null"
+            )
 
         return LinuxProotProcessSpecResult
             .Ready(

@@ -8,18 +8,35 @@ import androidx.lifecycle.viewModelScope
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
 import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxInteractiveCommandGuard
 import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
+import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveResizeResult
 import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveSessionStartResult
 import com.noahrose.pocketlab.feature.terminal.completion.CommandCompletion
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
+import com.noahrose.pocketlab.feature.terminal.interactive.LinuxInteractiveTerminalBridge
 import com.noahrose.pocketlab.feature.terminal.interactive.LinuxInteractiveTerminalSessionController
 import com.noahrose.pocketlab.feature.terminal.startup.AtlasRcManager
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.connectbot.terminal.TerminalEmulator
 
 class TerminalViewModel : ViewModel() {
+
+    companion object {
+
+        /*
+         * Compose may report several viewport sizes while
+         * Android animates the soft keyboard.
+         *
+         * Wait briefly for the viewport to settle before
+         * asking Ubuntu to change its PTY geometry.
+         */
+        private const val INTERACTIVE_RESIZE_DEBOUNCE_MS =
+            150L
+    }
 
     var uiState by mutableStateOf(
         TerminalUiState()
@@ -33,17 +50,8 @@ class TerminalViewModel : ViewModel() {
 
     /*
      * ------------------------------------------------
-     * INTERACTIVE TERMINAL UI STATE
+     * INTERACTIVE TERMINAL SESSION STATE
      * ------------------------------------------------
-     *
-     * These values mirror the application-level
-     * LinuxInteractiveTerminalSessionController.
-     *
-     * The ViewModel no longer OWNS nano/vim.
-     *
-     * If Android recreates this ViewModel, the new
-     * instance simply reconnects to the existing
-     * controller state.
      */
     var interactiveSessionActive by mutableStateOf(
         LinuxInteractiveTerminalSessionController
@@ -58,6 +66,71 @@ class TerminalViewModel : ViewModel() {
     )
         private set
 
+    /*
+     * ------------------------------------------------
+     * INTERACTIVE TERMINAL GEOMETRY
+     * ------------------------------------------------
+     *
+     * Before an interactive application starts, these
+     * hold the dimensions prepared by TerminalScreen.
+     *
+     * During an active PTY session they mirror the
+     * application-level controller.
+     *
+     * This keeps:
+     *
+     *     TerminalScreen
+     *     termlib
+     *     Linux PTY
+     *     nano / vim
+     *
+     * on one shared rows/columns contract.
+     */
+    var interactiveTerminalRows by mutableStateOf(
+        if (
+            LinuxInteractiveTerminalSessionController
+                .isActive
+        ) {
+
+            LinuxInteractiveTerminalSessionController
+                .rows
+
+        } else {
+
+            LinuxInteractiveTerminalBridge
+                .DEFAULT_ROWS
+        }
+    )
+        private set
+
+    var interactiveTerminalColumns by mutableStateOf(
+        if (
+            LinuxInteractiveTerminalSessionController
+                .isActive
+        ) {
+
+            LinuxInteractiveTerminalSessionController
+                .columns
+
+        } else {
+
+            LinuxInteractiveTerminalBridge
+                .DEFAULT_COLUMNS
+        }
+    )
+        private set
+
+    /*
+     * A pending viewport change is owned only by this
+     * ViewModel.
+     *
+     * The actual interactive process remains owned by the
+     * persistent application-level controller.
+     */
+    private var interactiveResizeJob:
+            Job? =
+        null
+
     val interactiveTerminalEmulator:
             TerminalEmulator
         get() =
@@ -69,13 +142,8 @@ class TerminalViewModel : ViewModel() {
         loadStartupConfiguration()
 
         /*
-         * Observe the application-level interactive
-         * session.
-         *
-         * StateFlow immediately supplies its current
-         * value, so a newly created ViewModel can restore
-         * the correct terminal UI without restarting the
-         * PTY application.
+         * Reattach to the application-level interactive
+         * terminal session after UI/ViewModel recreation.
          */
         viewModelScope
             .launch {
@@ -88,8 +156,34 @@ class TerminalViewModel : ViewModel() {
                             active
 
                         if (
-                            !active
+                            active
                         ) {
+
+                            /*
+                             * A recreated ViewModel must use
+                             * the geometry already owned by
+                             * the surviving PTY session.
+                             */
+                            interactiveTerminalRows =
+                                LinuxInteractiveTerminalSessionController
+                                    .rows
+
+                            interactiveTerminalColumns =
+                                LinuxInteractiveTerminalSessionController
+                                    .columns
+
+                        } else {
+
+                            /*
+                             * A resize request is no longer
+                             * meaningful once the interactive
+                             * process has ended.
+                             */
+                            interactiveResizeJob
+                                ?.cancel()
+
+                            interactiveResizeJob =
+                                null
 
                             interactiveControlArmed =
                                 false
@@ -166,6 +260,176 @@ class TerminalViewModel : ViewModel() {
                         output
                 )
         }
+    }
+
+    /*
+     * ------------------------------------------------
+     * INTERACTIVE TERMINAL GEOMETRY
+     * ------------------------------------------------
+     *
+     * Before an interactive session starts, geometry is
+     * simply prepared for launch.
+     *
+     * Once nano/vim is active, viewport changes become
+     * live PTY resize requests.
+     *
+     * The same mechanism can respond to:
+     *
+     *     Android keyboard open
+     *     Android keyboard closed
+     *     multi-window resizing
+     *     future desktop/window resizing
+     *
+     * TerminalScreen only reports the actual available
+     * viewport. It does not need to know why the viewport
+     * changed.
+     */
+    fun updateInteractiveTerminalGeometry(
+        columns: Int,
+        rows: Int
+    ) {
+
+        if (
+            columns <= 0 ||
+            rows <= 0
+        ) {
+
+            return
+        }
+
+        /*
+         * ------------------------------------------------
+         * PRE-LAUNCH GEOMETRY
+         * ------------------------------------------------
+         */
+        if (
+            !interactiveSessionActive
+        ) {
+
+            interactiveResizeJob
+                ?.cancel()
+
+            interactiveResizeJob =
+                null
+
+            if (
+                interactiveTerminalColumns ==
+                columns &&
+                interactiveTerminalRows ==
+                rows
+            ) {
+
+                return
+            }
+
+            interactiveTerminalColumns =
+                columns
+
+            interactiveTerminalRows =
+                rows
+
+            return
+        }
+
+        /*
+         * ------------------------------------------------
+         * LIVE PTY GEOMETRY
+         * ------------------------------------------------
+         */
+        if (
+            interactiveTerminalColumns ==
+            columns &&
+            interactiveTerminalRows ==
+            rows
+        ) {
+
+            return
+        }
+
+        /*
+         * Replace any resize request that has not yet
+         * reached the Linux PTY.
+         *
+         * This coalesces the several intermediate viewport
+         * sizes normally reported during IME animation.
+         */
+        interactiveResizeJob
+            ?.cancel()
+
+        interactiveResizeJob =
+            viewModelScope
+                .launch {
+
+                    delay(
+                        INTERACTIVE_RESIZE_DEBOUNCE_MS
+                    )
+
+                    if (
+                        !interactiveSessionActive
+                    ) {
+
+                        return@launch
+                    }
+
+                    val resizeResult =
+                        LinuxInteractiveTerminalSessionController
+                            .resize(
+                                columns =
+                                    columns,
+
+                                rows =
+                                    rows
+                            )
+
+                    when (
+                        resizeResult
+                    ) {
+
+                        is LinuxInteractiveResizeResult.Success -> {
+
+                            /*
+                             * Only publish the new Compose
+                             * geometry after both Ubuntu and
+                             * termlib accepted it.
+                             */
+                            interactiveTerminalColumns =
+                                resizeResult.columns
+
+                            interactiveTerminalRows =
+                                resizeResult.rows
+                        }
+
+                        is LinuxInteractiveResizeResult.Failure -> {
+
+                            /*
+                             * A resize failure must never
+                             * destroy the running editor or
+                             * pretend a new geometry exists.
+                             *
+                             * Keep the last known-good rows
+                             * and columns.
+                             *
+                             * If the process itself ended
+                             * during resize, synchronize the
+                             * ViewModel immediately.
+                             */
+                            if (
+                                !LinuxInteractiveTerminalSessionController
+                                    .isActive
+                            ) {
+
+                                interactiveSessionActive =
+                                    false
+
+                                interactiveControlArmed =
+                                    false
+
+                                commandRunning =
+                                    false
+                            }
+                        }
+                    }
+                }
     }
 
     fun updateCommand(
@@ -248,10 +512,6 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        /*
-         * PTY applications are intercepted only from
-         * Ubuntu shell mode.
-         */
         if (
             LinuxShellMode
                 .isActive() &&
@@ -373,12 +633,11 @@ class TerminalViewModel : ViewModel() {
      * INTERACTIVE COMMAND PATH
      * ------------------------------------------------
      *
-     * TerminalViewModel starts the session, but ownership
-     * immediately belongs to the application-level
-     * controller.
+     * The dimensions prepared by TerminalScreen are
+     * supplied through the entire PTY stack at launch.
      *
-     * The ViewModel does NOT pump PTY output and does NOT
-     * terminate the session when it is destroyed.
+     * Once the interactive process starts, those values
+     * may be updated by the live viewport resize path.
      */
     private fun executeInteractiveCommand(
         command: String
@@ -405,6 +664,20 @@ class TerminalViewModel : ViewModel() {
         commandRunning =
             true
 
+        /*
+         * Snapshot the best geometry currently known for
+         * initial PTY creation.
+         *
+         * Once the interactive viewport is visible,
+         * TerminalScreen may report a more accurate size
+         * through the live-resize path.
+         */
+        val launchColumns =
+            interactiveTerminalColumns
+
+        val launchRows =
+            interactiveTerminalRows
+
         viewModelScope
             .launch {
 
@@ -415,7 +688,14 @@ class TerminalViewModel : ViewModel() {
 
                         LinuxInteractiveTerminalSessionController
                             .start(
-                                command
+                                command =
+                                    command,
+
+                                columns =
+                                    launchColumns,
+
+                                rows =
+                                    launchRows
                             )
                     }
 
@@ -426,10 +706,17 @@ class TerminalViewModel : ViewModel() {
                     LinuxInteractiveSessionStartResult.Started -> {
 
                         /*
-                         * Controller StateFlow becomes true
-                         * and TerminalScreen switches to the
-                         * existing full-screen emulator.
+                         * Read the authoritative dimensions
+                         * back from the persistent controller.
                          */
+                        interactiveTerminalRows =
+                            LinuxInteractiveTerminalSessionController
+                                .rows
+
+                        interactiveTerminalColumns =
+                            LinuxInteractiveTerminalSessionController
+                                .columns
+
                         interactiveSessionActive =
                             true
 
@@ -438,6 +725,12 @@ class TerminalViewModel : ViewModel() {
                     }
 
                     is LinuxInteractiveSessionStartResult.Failure -> {
+
+                        interactiveResizeJob
+                            ?.cancel()
+
+                        interactiveResizeJob =
+                            null
 
                         interactiveSessionActive =
                             false
@@ -609,8 +902,6 @@ class TerminalViewModel : ViewModel() {
      * ------------------------------------------------
      * EXPLICIT INTERACTIVE STOP
      * ------------------------------------------------
-     *
-     * This is intentionally NOT tied to onCleared().
      */
     fun stopInteractiveSession() {
 
@@ -620,6 +911,16 @@ class TerminalViewModel : ViewModel() {
 
             return
         }
+
+        /*
+         * Never allow a pending viewport resize to race an
+         * explicit interactive-session shutdown.
+         */
+        interactiveResizeJob
+            ?.cancel()
+
+        interactiveResizeJob =
+            null
 
         viewModelScope
             .launch {
@@ -644,12 +945,9 @@ class TerminalViewModel : ViewModel() {
     }
 
     /*
-     * IMPORTANT:
+     * There is intentionally NO onCleared() override.
      *
-     * There is deliberately NO onCleared() override here.
-     *
-     * ViewModel destruction is a UI lifecycle event.
-     * It is not permission to destroy the user's active
+     * UI recreation must never destroy the user's active
      * Ubuntu terminal application.
      */
 }

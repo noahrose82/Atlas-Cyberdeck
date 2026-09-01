@@ -1,7 +1,9 @@
 package com.noahrose.pocketlab.feature.terminal.interactive
 
 import androidx.compose.ui.graphics.Color
+import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveResizeResult
 import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveSessionManager
+import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveSessionStartResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
@@ -29,25 +31,39 @@ class LinuxInteractiveTerminalBridge(
      * ------------------------------------------------
      * ONE-SHOT CTRL MODIFIER
      * ------------------------------------------------
-     *
-     * Android soft keyboards normally do not expose
-     * Ctrl.
-     *
-     * Atlas provides its own Ctrl key. When armed,
-     * the next ASCII letter received from the normal
-     * Android keyboard becomes a control character.
-     *
-     * Examples:
-     *
-     *     CTRL + C = 0x03
-     *     CTRL + O = 0x0F
-     *     CTRL + X = 0x18
-     *
-     * Ctrl automatically releases after the letter.
      */
     @Volatile
     private var controlArmed =
         false
+
+    /*
+     * ------------------------------------------------
+     * ACTIVE TERMINAL GEOMETRY
+     * ------------------------------------------------
+     *
+     * These values describe the geometry shared by:
+     *
+     *     termlib
+     *     Ubuntu PTY
+     *
+     * Once a session is running, Atlas must keep both
+     * sides synchronized.
+     */
+    @Volatile
+    private var activeRows =
+        DEFAULT_ROWS
+
+    @Volatile
+    private var activeColumns =
+        DEFAULT_COLUMNS
+
+    val rows: Int
+        get() =
+            activeRows
+
+    val columns: Int
+        get() =
+            activeColumns
 
     /*
      * ------------------------------------------------
@@ -127,21 +143,304 @@ class LinuxInteractiveTerminalBridge(
      * ------------------------------------------------
      * SESSION START
      * ------------------------------------------------
+     *
+     * The initial renderer geometry is established before
+     * launching the interactive process.
+     *
+     * LinuxInteractiveProotProcessSpecFactory then gives
+     * the newly allocated PTY the same rows and columns.
      */
     fun start(
-        command: String
-    ) =
-        LinuxInteractiveSessionManager
-            .start(
-                command =
-                    command,
+        command: String,
+        columns: Int = DEFAULT_COLUMNS,
+        rows: Int = DEFAULT_ROWS
+    ): LinuxInteractiveSessionStartResult {
 
-                columns =
-                    DEFAULT_COLUMNS,
+        if (
+            columns <= 0 ||
+            rows <= 0
+        ) {
 
-                rows =
-                    DEFAULT_ROWS
-            )
+            return LinuxInteractiveSessionStartResult
+                .Failure(
+                    message =
+                        "Interactive terminal dimensions must be greater than zero."
+                )
+        }
+
+        val previousRows =
+            activeRows
+
+        val previousColumns =
+            activeColumns
+
+        /*
+         * Prepare termlib for the same geometry that will
+         * be assigned to the Linux PTY.
+         */
+        try {
+
+            terminalEmulator
+                .resize(
+                    rows,
+                    columns
+                )
+
+        } catch (
+            exception: Exception
+        ) {
+
+            return LinuxInteractiveSessionStartResult
+                .Failure(
+                    message =
+                        "Atlas could not prepare the interactive terminal renderer.",
+                    cause =
+                        exception
+                )
+        }
+
+        activeRows =
+            rows
+
+        activeColumns =
+            columns
+
+        val startResult =
+            LinuxInteractiveSessionManager
+                .start(
+                    command =
+                        command,
+
+                    columns =
+                        columns,
+
+                    rows =
+                        rows
+                )
+
+        /*
+         * If Linux failed to start, restore the renderer
+         * to the geometry it had before this attempt.
+         */
+        if (
+            startResult is
+                    LinuxInteractiveSessionStartResult.Failure
+        ) {
+
+            try {
+
+                terminalEmulator
+                    .resize(
+                        previousRows,
+                        previousColumns
+                    )
+
+            } catch (
+                _: Exception
+            ) {
+
+                /*
+                 * Start already failed.
+                 *
+                 * Preserve the original Linux failure as
+                 * the authoritative result.
+                 */
+            }
+
+            activeRows =
+                previousRows
+
+            activeColumns =
+                previousColumns
+        }
+
+        return startResult
+    }
+
+    /*
+     * ------------------------------------------------
+     * LIVE TERMINAL RESIZE
+     * ------------------------------------------------
+     *
+     * This is intentionally viewport-driven rather than
+     * keyboard-driven.
+     *
+     * Any change to the actual terminal viewport may
+     * request new geometry:
+     *
+     *     Android IME open / close
+     *     portrait / landscape rotation
+     *     split-screen resizing
+     *     foldable posture changes
+     *     DeX / desktop windows
+     *
+     * LinuxInteractiveSessionManager updates the real PTY
+     * first. Only after Ubuntu confirms the new geometry
+     * does Atlas resize termlib to match.
+     */
+    fun resize(
+        columns: Int,
+        rows: Int
+    ): LinuxInteractiveResizeResult {
+
+        if (
+            columns <= 0 ||
+            rows <= 0
+        ) {
+
+            return LinuxInteractiveResizeResult
+                .Failure(
+                    message =
+                        "Interactive terminal dimensions must be greater than zero."
+                )
+        }
+
+        /*
+         * Avoid unnecessary stty operations and redraws.
+         */
+        if (
+            columns ==
+            activeColumns &&
+            rows ==
+            activeRows
+        ) {
+
+            return LinuxInteractiveResizeResult
+                .Success(
+                    columns =
+                        activeColumns,
+
+                    rows =
+                        activeRows
+                )
+        }
+
+        val previousRows =
+            activeRows
+
+        val previousColumns =
+            activeColumns
+
+        /*
+         * Resize the actual Linux PTY first.
+         */
+        val linuxResult =
+            LinuxInteractiveSessionManager
+                .resize(
+                    columns =
+                        columns,
+
+                    rows =
+                        rows
+                )
+
+        if (
+            linuxResult is
+                    LinuxInteractiveResizeResult.Failure
+        ) {
+
+            return linuxResult
+        }
+
+        /*
+         * Ubuntu accepted the new terminal geometry.
+         *
+         * Keep termlib synchronized with it.
+         */
+        return try {
+
+            terminalEmulator
+                .resize(
+                    rows,
+                    columns
+                )
+
+            activeRows =
+                rows
+
+            activeColumns =
+                columns
+
+            LinuxInteractiveResizeResult
+                .Success(
+                    columns =
+                        columns,
+
+                    rows =
+                        rows
+                )
+
+        } catch (
+            exception: Exception
+        ) {
+
+            /*
+             * The kernel resize succeeded but the renderer
+             * did not.
+             *
+             * Attempt to restore the PTY to the previous
+             * known-good geometry so the two sides do not
+             * remain intentionally mismatched.
+             */
+            val rollbackResult =
+                LinuxInteractiveSessionManager
+                    .resize(
+                        columns =
+                            previousColumns,
+
+                        rows =
+                            previousRows
+                    )
+
+            try {
+
+                terminalEmulator
+                    .resize(
+                        previousRows,
+                        previousColumns
+                    )
+
+            } catch (
+                _: Exception
+            ) {
+
+                /*
+                 * Preserve the resize failure below.
+                 */
+            }
+
+            activeRows =
+                previousRows
+
+            activeColumns =
+                previousColumns
+
+            val rollbackMessage =
+                when (
+                    rollbackResult
+                ) {
+
+                    is LinuxInteractiveResizeResult.Success -> {
+
+                        "The previous PTY geometry was restored."
+                    }
+
+                    is LinuxInteractiveResizeResult.Failure -> {
+
+                        "Atlas could not confirm PTY rollback: " +
+                                rollbackResult.message
+                    }
+                }
+
+            LinuxInteractiveResizeResult
+                .Failure(
+                    message =
+                        "Ubuntu accepted the new terminal size, but " +
+                                "the Atlas renderer could not apply it. " +
+                                rollbackMessage
+                )
+        }
+    }
 
     /*
      * ------------------------------------------------
@@ -389,9 +688,6 @@ class LinuxInteractiveTerminalBridge(
 
         /*
          * CTRL is one-shot.
-         *
-         * Once we consume a letter, Atlas releases
-         * the modifier automatically.
          */
         setControlArmed(
             false

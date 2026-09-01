@@ -1,54 +1,35 @@
 package com.noahrose.pocketlab.feature.terminal.interactive
 
+import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveResizeResult
 import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveSessionStartResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import org.connectbot.terminal.TerminalEmulator
 
-/*
- * ------------------------------------------------
- * ATLAS INTERACTIVE TERMINAL SESSION CONTROLLER
- * ------------------------------------------------
- *
- * Application-process owner for interactive Linux
- * terminal sessions.
- *
- * This object deliberately lives above:
- *
- *     TerminalScreen
- *     TerminalViewModel
- *
- * A Compose/ViewModel recreation must NOT terminate
- * nano, vim, top, less, or another active PTY program.
- *
- * Lifetime:
- *
- *     Android application process
- *              ↓
- *     Interactive controller
- *              ↓
- *     Terminal bridge
- *              ↓
- *     Dedicated PRoot
- *              ↓
- *     script / PTY
- *              ↓
- *     nano / vim
- */
 object LinuxInteractiveTerminalSessionController {
 
     /*
-     * Independent lifetime from any ViewModel.
+     * ------------------------------------------------
+     * PERSISTENT CONTROLLER SCOPE
+     * ------------------------------------------------
      *
-     * If TerminalViewModel disappears because Android
-     * recreates UI state, this scope remains alive.
+     * This scope belongs to the Atlas application process,
+     * not to TerminalViewModel.
+     *
+     * Therefore an active nano/vim session can survive:
+     *
+     *     Terminal -> Dashboard -> Terminal
+     *     Activity recreation
+     *     ViewModel recreation
      */
     private val controllerScope =
         CoroutineScope(
@@ -56,9 +37,15 @@ object LinuxInteractiveTerminalSessionController {
                     Dispatchers.IO
         )
 
-    private var outputPumpJob:
-            Job? =
-        null
+    /*
+     * Serialize live resize operations.
+     *
+     * LinuxGuestCommandExecutor is itself synchronized,
+     * but this mutex also protects the renderer side from
+     * overlapping geometry transitions.
+     */
+    private val resizeMutex =
+        Mutex()
 
     private val _sessionActive =
         MutableStateFlow(
@@ -81,14 +68,9 @@ object LinuxInteractiveTerminalSessionController {
             .asStateFlow()
 
     /*
-     * The bridge and its TerminalEmulator are intentionally
-     * created exactly once for the Android application
-     * process.
-     *
-     * This is the critical lifecycle change.
-     *
-     * Previously every TerminalViewModel created its own
-     * bridge/emulator and killed the PTY from onCleared().
+     * ------------------------------------------------
+     * PERSISTENT TERMINAL BRIDGE
+     * ------------------------------------------------
      */
     private val bridge =
         LinuxInteractiveTerminalBridge(
@@ -99,56 +81,64 @@ object LinuxInteractiveTerminalSessionController {
             }
         )
 
-    val terminalEmulator:
-            TerminalEmulator
-        get() =
-            bridge
-                .terminalEmulator
+    private var outputPumpJob:
+            Job? =
+        null
 
-    val isActive:
-            Boolean
-        get() {
+    init {
 
-            val active =
-                bridge
-                    .isActive
+        /*
+         * Synchronize StateFlows with any session already
+         * owned by the underlying process manager.
+         */
+        _sessionActive.value =
+            bridge.isActive
 
-            if (
-                !active &&
-                _sessionActive.value
-            ) {
-
-                _sessionActive.value =
-                    false
-
-                _controlArmed.value =
-                    false
-            }
-
-            return active
-        }
+        _controlArmed.value =
+            bridge.isControlArmed()
+    }
 
     /*
      * ------------------------------------------------
-     * START
+     * TERMINAL STATE
      * ------------------------------------------------
      */
-    @Synchronized
+    val terminalEmulator:
+            TerminalEmulator
+        get() =
+            bridge.terminalEmulator
+
+    val rows: Int
+        get() =
+            bridge.rows
+
+    val columns: Int
+        get() =
+            bridge.columns
+
+    val isActive: Boolean
+        get() =
+            bridge.isActive
+
+    /*
+     * ------------------------------------------------
+     * SESSION START
+     * ------------------------------------------------
+     */
     fun start(
-        command: String
+        command: String,
+        columns: Int =
+            LinuxInteractiveTerminalBridge.DEFAULT_COLUMNS,
+        rows: Int =
+            LinuxInteractiveTerminalBridge.DEFAULT_ROWS
     ): LinuxInteractiveSessionStartResult {
 
-        /*
-         * Never allow two interactive applications to
-         * compete for Atlas terminal ownership.
-         */
         if (
-            bridge.isActive ||
-            _sessionActive.value
+            bridge.isActive
         ) {
 
             _sessionActive.value =
-                bridge.isActive
+                true
 
             return LinuxInteractiveSessionStartResult
                 .Failure(
@@ -157,50 +147,168 @@ object LinuxInteractiveTerminalSessionController {
                 )
         }
 
-        /*
-         * Clear stale pump bookkeeping from a completed
-         * prior session.
-         */
-        outputPumpJob
-            ?.cancel()
+        if (
+            columns <= 0 ||
+            rows <= 0
+        ) {
 
-        outputPumpJob =
-            null
-
-        _controlArmed.value =
-            false
+            return LinuxInteractiveSessionStartResult
+                .Failure(
+                    message =
+                        "Interactive terminal dimensions must be greater than zero."
+                )
+        }
 
         val startResult =
             bridge
                 .start(
-                    command
+                    command =
+                        command,
+
+                    columns =
+                        columns,
+
+                    rows =
+                        rows
                 )
 
+        when (
+            startResult
+        ) {
+
+            is LinuxInteractiveSessionStartResult.Started -> {
+
+                _sessionActive.value =
+                    true
+
+                _controlArmed.value =
+                    bridge
+                        .isControlArmed()
+
+                startOutputPump()
+            }
+
+            is LinuxInteractiveSessionStartResult.Failure -> {
+
+                _sessionActive.value =
+                    bridge.isActive
+
+                _controlArmed.value =
+                    bridge
+                        .isControlArmed()
+            }
+        }
+
+        return startResult
+    }
+
+    /*
+     * ------------------------------------------------
+     * LIVE VIEWPORT RESIZE
+     * ------------------------------------------------
+     *
+     * This operation is intentionally suspendable.
+     *
+     * Updating the Linux PTY uses the persistent Ubuntu
+     * guest command executor and must never block Compose's
+     * UI thread.
+     *
+     * The caller may request this whenever the actual
+     * terminal viewport changes.
+     */
+    suspend fun resize(
+        columns: Int,
+        rows: Int
+    ): LinuxInteractiveResizeResult {
+
         if (
-            startResult !is
-                    LinuxInteractiveSessionStartResult.Started
+            columns <= 0 ||
+            rows <= 0
+        ) {
+
+            return LinuxInteractiveResizeResult
+                .Failure(
+                    message =
+                        "Interactive terminal dimensions must be greater than zero."
+                )
+        }
+
+        if (
+            !bridge.isActive
         ) {
 
             _sessionActive.value =
                 false
 
-            return startResult
+            return LinuxInteractiveResizeResult
+                .Failure(
+                    message =
+                        "No interactive Ubuntu session is active."
+                )
         }
 
-        _sessionActive.value =
-            true
+        return resizeMutex
+            .withLock {
+
+                /*
+                 * Re-check after waiting for another resize
+                 * operation to finish.
+                 */
+                if (
+                    !bridge.isActive
+                ) {
+
+                    _sessionActive.value =
+                        false
+
+                    return@withLock LinuxInteractiveResizeResult
+                        .Failure(
+                            message =
+                                "The interactive Ubuntu session ended before resize."
+                        )
+                }
+
+                val result =
+                    withContext(
+                        Dispatchers.IO
+                    ) {
+
+                        bridge
+                            .resize(
+                                columns =
+                                    columns,
+
+                                rows =
+                                    rows
+                            )
+                    }
+
+                /*
+                 * Keep controller state synchronized even
+                 * if the interactive process exits during
+                 * the resize attempt.
+                 */
+                _sessionActive.value =
+                    bridge.isActive
+
+                result
+            }
+    }
+
+    /*
+     * ------------------------------------------------
+     * OUTPUT PUMP
+     * ------------------------------------------------
+     */
+    private fun startOutputPump() {
 
         /*
-         * ------------------------------------------------
-         * PERSISTENT RAW OUTPUT PUMP
-         * ------------------------------------------------
-         *
-         * This coroutine belongs to the application-level
-         * controller rather than TerminalViewModel.
-         *
-         * UI recreation therefore does not cancel the PTY
-         * reader.
+         * Only one output pump may own the interactive
+         * streams at a time.
          */
+        outputPumpJob
+            ?.cancel()
+
         outputPumpJob =
             controllerScope
                 .launch {
@@ -213,49 +321,71 @@ object LinuxInteractiveTerminalSessionController {
                     } finally {
 
                         _sessionActive.value =
-                            false
+                            bridge.isActive
 
                         _controlArmed.value =
-                            false
+                            bridge
+                                .isControlArmed()
 
                         outputPumpJob =
                             null
                     }
                 }
-
-        return LinuxInteractiveSessionStartResult
-            .Started
     }
 
     /*
      * ------------------------------------------------
-     * INTERACTIVE INPUT
+     * RAW INPUT
      * ------------------------------------------------
      */
+    fun sendBytes(
+        bytes: ByteArray
+    ): Boolean {
+
+        return bridge
+            .sendBytes(
+                bytes
+            )
+    }
+
+    fun sendText(
+        text: String
+    ): Boolean {
+
+        return sendBytes(
+            text.encodeToByteArray()
+        )
+    }
+
+    /*
+     * ------------------------------------------------
+     * CTRL
+     * ------------------------------------------------
+     */
+    fun setControlArmed(
+        armed: Boolean
+    ) {
+
+        bridge
+            .setControlArmed(
+                armed
+            )
+    }
 
     fun toggleControlArmed():
             Boolean {
-
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
 
         return bridge
             .toggleControlArmed()
     }
 
+    /*
+     * ------------------------------------------------
+     * TERMINAL KEYS
+     * ------------------------------------------------
+     */
     fun sendEscape():
             Boolean {
-
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
 
         return bridge
             .sendEscape()
@@ -264,26 +394,12 @@ object LinuxInteractiveTerminalSessionController {
     fun sendTab():
             Boolean {
 
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
-
         return bridge
             .sendTab()
     }
 
     fun sendEnter():
             Boolean {
-
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
 
         return bridge
             .sendEnter()
@@ -292,40 +408,22 @@ object LinuxInteractiveTerminalSessionController {
     fun sendBackspace():
             Boolean {
 
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
-
         return bridge
             .sendBackspace()
     }
 
-    fun sendArrowLeft():
-            Boolean {
-
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
+    fun sendControl(
+        character: Char
+    ): Boolean {
 
         return bridge
-            .sendArrowLeft()
+            .sendControl(
+                character
+            )
     }
 
     fun sendArrowUp():
             Boolean {
-
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
 
         return bridge
             .sendArrowUp()
@@ -334,69 +432,74 @@ object LinuxInteractiveTerminalSessionController {
     fun sendArrowDown():
             Boolean {
 
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
-
         return bridge
             .sendArrowDown()
+    }
+
+    fun sendArrowLeft():
+            Boolean {
+
+        return bridge
+            .sendArrowLeft()
     }
 
     fun sendArrowRight():
             Boolean {
 
-        if (
-            !isActive
-        ) {
-
-            return false
-        }
-
         return bridge
             .sendArrowRight()
     }
 
-    fun sendControl(
-        character: Char
-    ): Boolean {
+    /*
+     * ------------------------------------------------
+     * STATE REFRESH
+     * ------------------------------------------------
+     */
+    fun refresh():
+            Boolean {
+
+        val active =
+            bridge.isActive
+
+        _sessionActive.value =
+            active
 
         if (
-            !isActive
+            !active
         ) {
 
-            return false
+            bridge
+                .setControlArmed(
+                    false
+                )
         }
 
-        return bridge
-            .sendControl(
-                character
-            )
+        return active
     }
 
     /*
      * ------------------------------------------------
-     * EXPLICIT STOP
+     * SESSION STOP
      * ------------------------------------------------
-     *
-     * UI recreation does NOT call this.
-     *
-     * Explicit runtime shutdown, safety transitions,
-     * Linux removal, or user-requested session
-     * termination may call this.
      */
-    @Synchronized
     fun stop():
             Boolean {
 
-        _controlArmed.value =
-            false
+        bridge
+            .setControlArmed(
+                false
+            )
 
         val stopped =
             bridge
                 .stop()
+
+        _sessionActive.value =
+            bridge.isActive
+
+        _controlArmed.value =
+            bridge
+                .isControlArmed()
 
         if (
             stopped
@@ -407,9 +510,6 @@ object LinuxInteractiveTerminalSessionController {
 
             outputPumpJob =
                 null
-
-            _sessionActive.value =
-                false
         }
 
         return stopped

@@ -1,6 +1,8 @@
 package com.noahrose.pocketlab.feature.linux.runtime.process
 
 import com.noahrose.pocketlab.feature.linux.runtime.ProotLinuxRuntimeBackend
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandExecutor
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxGuestCommandResult
 import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
 import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyMode
 import java.io.InputStream
@@ -26,10 +28,6 @@ object LinuxInteractiveSessionManager {
      * ------------------------------------------------
      * START INTERACTIVE SESSION
      * ------------------------------------------------
-     *
-     * Interactive applications run in their own PRoot
-     * process and never replace Atlas' persistent Ubuntu
-     * command process.
      */
     @Synchronized
     fun start(
@@ -38,10 +36,6 @@ object LinuxInteractiveSessionManager {
         rows: Int = 24
     ): LinuxInteractiveSessionStartResult {
 
-        /*
-         * Clean up a stale reference from a previously
-         * completed interactive process.
-         */
         val existingProcess =
             activeProcess
 
@@ -67,9 +61,6 @@ object LinuxInteractiveSessionManager {
         /*
          * Interactive Linux access is available only
          * while Atlas safety is fully NORMAL.
-         *
-         * SAFE_MODE and RECOVERY_ARMED must never be
-         * bypassed by the PTY path.
          */
         val safetySnapshot =
             LinuxRuntimeCircuitBreaker
@@ -89,11 +80,7 @@ object LinuxInteractiveSessionManager {
         }
 
         /*
-         * Require the normal Ubuntu runtime to already be
-         * alive.
-         *
-         * The interactive process is a companion session,
-         * not an independent way to bypass `linux start`.
+         * Require the persistent Ubuntu runtime.
          */
         val runtimeProcess =
             ProotLinuxRuntimeBackend
@@ -180,14 +167,268 @@ object LinuxInteractiveSessionManager {
 
     /*
      * ------------------------------------------------
-     * RAW INPUT
+     * LIVE PTY RESIZE
      * ------------------------------------------------
      *
-     * Unlike LinuxGuestCommandExecutor, interactive input
-     * is NOT command-delimited.
+     * The interactive PRoot process itself does not expose
+     * its PTY descriptor to Android.
      *
-     * Every byte is forwarded directly to `script`, which
-     * relays it into the PTY owned by nano/vim/etc.
+     * LinuxInteractiveProotProcessSpecFactory therefore
+     * publishes the PTY slave path into:
+     *
+     *     /tmp/.atlas-interactive-pty
+     *
+     * Example:
+     *
+     *     /dev/pts/3
+     *
+     * Atlas uses its persistent Ubuntu command process as
+     * a control channel to update the kernel terminal
+     * window size for that PTY.
+     */
+    @Synchronized
+    fun resize(
+        columns: Int,
+        rows: Int
+    ): LinuxInteractiveResizeResult {
+
+        if (
+            columns <= 0 ||
+            rows <= 0
+        ) {
+
+            return LinuxInteractiveResizeResult
+                .Failure(
+                    message =
+                        "Interactive terminal dimensions must be greater than zero."
+                )
+        }
+
+        val process =
+            activeProcess
+                ?: return LinuxInteractiveResizeResult
+                    .Failure(
+                        message =
+                            "No interactive Ubuntu session is active."
+                    )
+
+        if (
+            !process.isAlive
+        ) {
+
+            activeProcess =
+                null
+
+            return LinuxInteractiveResizeResult
+                .Failure(
+                    message =
+                        "The interactive Ubuntu process is no longer running."
+                )
+        }
+
+        /*
+         * Resize remains fail-closed under Atlas safety.
+         */
+        val safetySnapshot =
+            LinuxRuntimeCircuitBreaker
+                .getSnapshot()
+
+        if (
+            safetySnapshot.mode !=
+            LinuxRuntimeSafetyMode.NORMAL
+        ) {
+
+            return LinuxInteractiveResizeResult
+                .Failure(
+                    message =
+                        "Interactive terminal resize is unavailable " +
+                                "while Atlas runtime safety is not NORMAL."
+                )
+        }
+
+        val controlFile =
+            LinuxInteractiveProotProcessSpecFactory
+                .PTY_CONTROL_FILE
+
+        /*
+         * ------------------------------------------------
+         * PTY VALIDATION + RESIZE COMMAND
+         * ------------------------------------------------
+         *
+         * Do not blindly trust the transient control file.
+         *
+         * We require:
+         *
+         *     /dev/pts/<numeric-id>
+         *
+         * before passing the path to stty.
+         *
+         * rows and columns are Kotlin Int values that have
+         * already been range-checked above.
+         */
+        val resizeCommand =
+            buildString {
+
+                append(
+                    "ATLAS_PTY=\$(cat "
+                )
+
+                append(
+                    controlFile
+                )
+
+                append(
+                    " 2>/dev/null) || exit 70; "
+                )
+
+                append(
+                    "case \"\$ATLAS_PTY\" in "
+                )
+
+                append(
+                    "/dev/pts/*) "
+                )
+
+                append(
+                    "ATLAS_PTY_NUMBER=\"\${ATLAS_PTY#/dev/pts/}\" "
+                )
+
+                append(
+                    ";; "
+                )
+
+                append(
+                    "*) exit 71 ;; "
+                )
+
+                append(
+                    "esac; "
+                )
+
+                append(
+                    "case \"\$ATLAS_PTY_NUMBER\" in "
+                )
+
+                append(
+                    "''|*[!0-9]*) exit 71 ;; "
+                )
+
+                append(
+                    "esac; "
+                )
+
+                /*
+                 * Require the PTY device to still exist.
+                 */
+                append(
+                    "[ -c \"\$ATLAS_PTY\" ] || exit 72; "
+                )
+
+                /*
+                 * Apply the kernel terminal window size.
+                 */
+                append(
+                    "stty -F \"\$ATLAS_PTY\" rows "
+                )
+
+                append(
+                    rows
+                )
+
+                append(
+                    " cols "
+                )
+
+                append(
+                    columns
+                )
+
+                append(
+                    " >/dev/null 2>&1 || exit 73; "
+                )
+
+                /*
+                 * Read the value back so Atlas verifies
+                 * that the kernel accepted it.
+                 */
+                append(
+                    "ATLAS_SIZE=\$(stty -F \"\$ATLAS_PTY\" size 2>/dev/null) || exit 74; "
+                )
+
+                append(
+                    "[ \"\$ATLAS_SIZE\" = \""
+                )
+
+                append(
+                    rows
+                )
+
+                append(
+                    " "
+                )
+
+                append(
+                    columns
+                )
+
+                append(
+                    "\" ] || exit 75"
+                )
+            }
+
+        val result =
+            LinuxGuestCommandExecutor
+                .execute(
+                    command =
+                        resizeCommand
+                )
+
+        return when (
+            result
+        ) {
+
+            is LinuxGuestCommandResult.Success -> {
+
+                if (
+                    result.exitCode ==
+                    0
+                ) {
+
+                    LinuxInteractiveResizeResult
+                        .Success(
+                            columns =
+                                columns,
+
+                            rows =
+                                rows
+                        )
+
+                } else {
+
+                    LinuxInteractiveResizeResult
+                        .Failure(
+                            message =
+                                "Ubuntu rejected the interactive terminal resize " +
+                                        "(exit ${result.exitCode})."
+                        )
+                }
+            }
+
+            is LinuxGuestCommandResult.Failure -> {
+
+                LinuxInteractiveResizeResult
+                    .Failure(
+                        message =
+                            result.message
+                    )
+            }
+        }
+    }
+
+    /*
+     * ------------------------------------------------
+     * RAW INPUT
+     * ------------------------------------------------
      */
     @Synchronized
     fun write(
@@ -245,12 +486,6 @@ object LinuxInteractiveSessionManager {
      * ------------------------------------------------
      * RAW OUTPUT
      * ------------------------------------------------
-     *
-     * The consumer must read these streams as raw bytes.
-     *
-     * Do NOT convert interactive output into line-based
-     * terminal output. ANSI terminal applications may
-     * redraw any location on the screen.
      */
     @Synchronized
     fun getInputStream():
@@ -302,7 +537,8 @@ object LinuxInteractiveSessionManager {
      * ------------------------------------------------
      */
     @Synchronized
-    fun refresh(): Boolean {
+    fun refresh():
+            Boolean {
 
         val process =
             activeProcess
@@ -329,7 +565,8 @@ object LinuxInteractiveSessionManager {
      * LinuxProcessHandle.
      */
     @Synchronized
-    fun stop(): Boolean {
+    fun stop():
+            Boolean {
 
         val process =
             activeProcess
@@ -373,4 +610,21 @@ sealed interface LinuxInteractiveSessionStartResult {
         val message: String,
         val cause: Throwable? = null
     ) : LinuxInteractiveSessionStartResult
+}
+
+/*
+ * ------------------------------------------------
+ * LIVE RESIZE RESULT
+ * ------------------------------------------------
+ */
+sealed interface LinuxInteractiveResizeResult {
+
+    data class Success(
+        val columns: Int,
+        val rows: Int
+    ) : LinuxInteractiveResizeResult
+
+    data class Failure(
+        val message: String
+    ) : LinuxInteractiveResizeResult
 }
