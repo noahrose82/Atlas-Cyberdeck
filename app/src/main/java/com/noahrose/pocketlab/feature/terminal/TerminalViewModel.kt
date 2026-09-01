@@ -952,12 +952,28 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
+        if (
+            interactiveControlArmed &&
+            text.length == 1 &&
+            text[0].isLetter()
+        ) {
+
+            LinuxInteractiveTerminalSessionController
+                .sendControl(
+                    text[0]
+                )
+
+            LinuxInteractiveTerminalSessionController
+                .toggleControlArmed()
+
+            return
+        }
+
         LinuxInteractiveTerminalSessionController
             .sendText(
                 text
             )
     }
-
     /*
      * There is intentionally NO onCleared() override.
      *
