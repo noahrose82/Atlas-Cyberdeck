@@ -912,10 +912,6 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        /*
-         * Never allow a pending viewport resize to race an
-         * explicit interactive-session shutdown.
-         */
         interactiveResizeJob
             ?.cancel()
 
@@ -942,6 +938,24 @@ class TerminalViewModel : ViewModel() {
                 commandRunning =
                     false
             }
+    }
+
+    fun sendInteractiveText(
+        text: String
+    ) {
+
+        if (
+            !interactiveSessionActive ||
+            text.isEmpty()
+        ) {
+
+            return
+        }
+
+        LinuxInteractiveTerminalSessionController
+            .sendText(
+                text
+            )
     }
 
     /*

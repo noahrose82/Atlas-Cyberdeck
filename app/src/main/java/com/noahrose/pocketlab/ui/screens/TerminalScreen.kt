@@ -69,16 +69,10 @@ private val RecoveryModeAmber =
 
 /*
  * ------------------------------------------------
- * INTERACTIVE TERMINAL CELL TARGETS
+ * TERMINAL GEOMETRY
  * ------------------------------------------------
- *
- * Atlas converts the available terminal viewport into
- * rows and columns using a conventional mobile terminal
- * cell target.
- *
- * termlib then renders that geometry into the actual
- * Canvas.
  */
+
 private const val InteractiveTargetCellWidthDp =
     8f
 
@@ -86,36 +80,23 @@ private const val InteractiveTargetCellHeightDp =
     16f
 
 /*
- * ------------------------------------------------
- * PRE-LAUNCH KEY BAR RESERVATION
- * ------------------------------------------------
+ * Existing two-row control bar:
  *
- * Before nano/vim starts, TerminalScreen is still showing
- * the ordinary command UI.
- *
- * We therefore reserve the height that will be occupied
- * by InteractiveTerminalKeyBar after the PTY launches.
- *
- * InteractiveTerminalKeyBar:
- *
- *     42 dp first row
- *      4 dp row spacing
- *     42 dp second row
+ *     42 dp row
+ *      4 dp spacing
+ *     42 dp row
  *      8 dp vertical padding
  *
  * Total = 96 dp.
  *
- * Once the interactive screen is visible Atlas no longer
- * estimates this. Scaffold removes the bottom bar and we
- * measure the real remaining terminal viewport directly.
+ * This is used only for PRE-LAUNCH geometry.
+ *
+ * Once the PTY is running, Atlas measures the real
+ * remaining terminal viewport directly.
  */
 private const val InteractiveKeyBarHeightDp =
     96f
 
-/*
- * Prevent unusual Android layout states from requesting
- * unreasonable terminal dimensions.
- */
 private const val InteractiveMinimumColumns =
     32
 
@@ -161,15 +142,8 @@ fun TerminalScreen(
         LocalDensity.current
 
     /*
-     * ------------------------------------------------
-     * PRE-LAUNCH MEASUREMENT
-     * ------------------------------------------------
-     *
-     * This is the ordinary terminal area measured before
-     * nano/vim starts.
-     *
-     * It gives Atlas a reasonable initial PTY size so the
-     * application does not need to begin at a blind 80x24.
+     * Normal-terminal viewport used to prepare geometry
+     * before nano/vim launches.
      */
     var measuredTerminalArea by
     remember {
@@ -180,21 +154,11 @@ fun TerminalScreen(
     }
 
     /*
-     * ------------------------------------------------
-     * LIVE INTERACTIVE VIEWPORT
-     * ------------------------------------------------
+     * Actual usable termlib viewport while an interactive
+     * PTY application is running.
      *
-     * Unlike measuredTerminalArea, this represents the
-     * real black termlib area after:
-     *
-     *     Scaffold layout
-     *     IME padding
-     *     Atlas key bar
-     *
-     * have already been accounted for.
-     *
-     * This is the authoritative viewport used for live
-     * PTY resizing.
+     * Scaffold has already removed the complete Atlas
+     * bottom controls/keyboard before this is measured.
      */
     var measuredInteractiveViewport by
     remember {
@@ -277,11 +241,8 @@ fun TerminalScreen(
      * ------------------------------------------------
      * PRE-LAUNCH GEOMETRY
      * ------------------------------------------------
-     *
-     * While there is no active PTY, estimate the geometry
-     * that will be needed once the interactive screen
-     * replaces the normal terminal.
      */
+
     LaunchedEffect(
         measuredTerminalArea,
         interactiveSessionActive,
@@ -326,8 +287,11 @@ fun TerminalScreen(
             }
 
         /*
-         * The interactive Scaffold will introduce the
-         * Atlas mobile terminal key bar after launch.
+         * Reserve the existing interactive control bar.
+         *
+         * The larger Atlas keyboard appears after the PTY
+         * begins and live resize immediately corrects the
+         * guest geometry to the real viewport.
          */
         val interactiveContentHeightDp =
             (
@@ -372,25 +336,16 @@ fun TerminalScreen(
 
     /*
      * ------------------------------------------------
-     * LIVE INTERACTIVE GEOMETRY
+     * LIVE INTERACTIVE PTY RESIZE
      * ------------------------------------------------
      *
-     * This is the important path.
+     * The measured area is already the space remaining
+     * after Scaffold removes the Atlas bottom bar and
+     * Atlas keyboard.
      *
-     * Once nano/vim is active we stop estimating and use
-     * the actual termlib viewport.
-     *
-     * Any Android event that changes that viewport becomes
-     * the same operation:
-     *
-     *     soft keyboard opens
-     *     soft keyboard closes
-     *     multi-window changes
-     *     display/window size changes
-     *
-     * TerminalViewModel debounces these measurements before
-     * asking the persistent controller to resize the PTY.
+     * Do NOT subtract their height again here.
      */
+
     LaunchedEffect(
         measuredInteractiveViewport,
         interactiveSessionActive,
@@ -412,7 +367,7 @@ fun TerminalScreen(
             return@LaunchedEffect
         }
 
-        val viewportWidthDp =
+        val availableWidthDp =
             with(
                 density
             ) {
@@ -423,7 +378,7 @@ fun TerminalScreen(
                     .value
             }
 
-        val viewportHeightDp =
+        val availableHeightDp =
             with(
                 density
             ) {
@@ -434,15 +389,9 @@ fun TerminalScreen(
                     .value
             }
 
-        /*
-         * Do NOT subtract the key bar here.
-         *
-         * Scaffold innerPadding has already removed it from
-         * this measured viewport.
-         */
         val calculatedColumns =
             (
-                    viewportWidthDp /
+                    availableWidthDp /
                             InteractiveTargetCellWidthDp
                     )
                 .toInt()
@@ -453,7 +402,7 @@ fun TerminalScreen(
 
         val calculatedRows =
             (
-                    viewportHeightDp /
+                    availableHeightDp /
                             InteractiveTargetCellHeightDp
                     )
                 .toInt()
@@ -477,6 +426,7 @@ fun TerminalScreen(
      * FAIL-CLOSED INTERACTIVE SESSION
      * ------------------------------------------------
      */
+
     LaunchedEffect(
         safetyMode,
         interactiveSessionActive
@@ -495,9 +445,10 @@ fun TerminalScreen(
 
     /*
      * ------------------------------------------------
-     * INTERACTIVE TERMINAL
+     * INTERACTIVE UBUNTU TERMINAL
      * ------------------------------------------------
      */
+
     if (
         interactiveSessionActive
     ) {
@@ -516,104 +467,141 @@ fun TerminalScreen(
 
             bottomBar = {
 
-                InteractiveTerminalKeyBar(
+                Column(
                     modifier =
                         Modifier
                             .fillMaxWidth()
                             .zIndex(
                                 10f
-                            ),
-
-                    controlArmed =
-                        interactiveControlArmed,
-
-                    onControl = {
-
-                        terminalViewModel
-                            .toggleInteractiveControl()
-                    },
-
-                    onEscape = {
-
-                        terminalViewModel
-                            .sendInteractiveEscape()
-                    },
-
-                    onTab = {
-
-                        terminalViewModel
-                            .sendInteractiveTab()
-                    },
-
-                    onArrowLeft = {
-
-                        terminalViewModel
-                            .sendInteractiveArrowLeft()
-                    },
-
-                    onArrowUp = {
-
-                        terminalViewModel
-                            .sendInteractiveArrowUp()
-                    },
-
-                    onArrowDown = {
-
-                        terminalViewModel
-                            .sendInteractiveArrowDown()
-                    },
-
-                    onArrowRight = {
-
-                        terminalViewModel
-                            .sendInteractiveArrowRight()
-                    },
-
-                    onEnter = {
-
-                        terminalViewModel
-                            .sendInteractiveEnter()
-                    },
-
-                    onBackspace = {
-
-                        terminalViewModel
-                            .sendInteractiveBackspace()
-                    },
-
-                    onControlC = {
-
-                        terminalViewModel
-                            .sendInteractiveControl(
-                                'C'
                             )
-                    },
+                ) {
 
-                    onControlO = {
+                    /*
+                     * Existing validated Atlas terminal
+                     * control/navigation bar.
+                     */
+                    InteractiveTerminalKeyBar(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth(),
 
-                        terminalViewModel
-                            .sendInteractiveControl(
-                                'O'
-                            )
-                    },
+                        controlArmed =
+                            interactiveControlArmed,
 
-                    onControlX = {
+                        onControl = {
 
-                        terminalViewModel
-                            .sendInteractiveControl(
-                                'X'
-                            )
-                    }
-                )
+                            terminalViewModel
+                                .toggleInteractiveControl()
+                        },
+
+                        onEscape = {
+
+                            terminalViewModel
+                                .sendInteractiveEscape()
+                        },
+
+                        onTab = {
+
+                            terminalViewModel
+                                .sendInteractiveTab()
+                        },
+
+                        onArrowLeft = {
+
+                            terminalViewModel
+                                .sendInteractiveArrowLeft()
+                        },
+
+                        onArrowUp = {
+
+                            terminalViewModel
+                                .sendInteractiveArrowUp()
+                        },
+
+                        onArrowDown = {
+
+                            terminalViewModel
+                                .sendInteractiveArrowDown()
+                        },
+
+                        onArrowRight = {
+
+                            terminalViewModel
+                                .sendInteractiveArrowRight()
+                        },
+
+                        onEnter = {
+
+                            terminalViewModel
+                                .sendInteractiveEnter()
+                        },
+
+                        onBackspace = {
+
+                            terminalViewModel
+                                .sendInteractiveBackspace()
+                        },
+
+                        onControlC = {
+
+                            terminalViewModel
+                                .sendInteractiveControl(
+                                    'C'
+                                )
+                        },
+
+                        onControlO = {
+
+                            terminalViewModel
+                                .sendInteractiveControl(
+                                    'O'
+                                )
+                        },
+
+                        onControlX = {
+
+                            terminalViewModel
+                                .sendInteractiveControl(
+                                    'X'
+                                )
+                        }
+                    )
+
+                    /*
+                     * Atlas-native terminal keyboard.
+                     *
+                     * Android's soft keyboard is no longer
+                     * required for normal interactive input.
+                     */
+                    AtlasTerminalKeyboard(
+                        modifier =
+                            Modifier
+                                .fillMaxWidth(),
+
+                        onText = { text ->
+
+                            terminalViewModel
+                                .sendInteractiveText(
+                                    text
+                                )
+                        },
+
+                        onEnter = {
+
+                            terminalViewModel
+                                .sendInteractiveEnter()
+                        },
+
+                        onBackspace = {
+
+                            terminalViewModel
+                                .sendInteractiveBackspace()
+                        }
+                    )
+                }
             }
         ) { innerPadding ->
 
-            /*
-             * Outer container applies Scaffold geometry.
-             *
-             * The nested Box below is therefore exactly the
-             * space that belongs to termlib.
-             */
             Box(
                 modifier =
                     Modifier
@@ -626,6 +614,25 @@ fun TerminalScreen(
                         )
             ) {
 
+                /*
+                 * This Box represents the REAL interactive
+                 * terminal viewport.
+                 *
+                 * Any change here drives the PTY resize
+                 * pipeline:
+                 *
+                 * TerminalScreen
+                 *      ↓
+                 * TerminalViewModel
+                 *      ↓
+                 * SessionController
+                 *      ↓
+                 * Bridge
+                 *      ↓
+                 * Linux PTY / stty
+                 *      ↓
+                 * termlib
+                 */
                 Box(
                     modifier =
                         Modifier
@@ -637,21 +644,6 @@ fun TerminalScreen(
                             }
                 ) {
 
-                    /*
-                     * termlib always receives the geometry
-                     * currently confirmed by the PTY stack.
-                     *
-                     * A viewport change first flows through:
-                     *
-                     *     TerminalScreen
-                     *     TerminalViewModel
-                     *     SessionController
-                     *     Bridge
-                     *     Linux PTY
-                     *
-                     * Only after successful resize are these
-                     * rows and columns updated.
-                     */
                     Terminal(
                         terminalEmulator =
                             terminalViewModel
@@ -667,11 +659,19 @@ fun TerminalScreen(
                         foregroundColor =
                             UbuntuTerminalGreen,
 
+                        /*
+                         * Keep hardware/Bluetooth keyboard
+                         * input supported by termlib.
+                         */
                         keyboardEnabled =
                             true,
 
+                        /*
+                         * Atlas now owns the on-screen
+                         * terminal keyboard.
+                         */
                         showSoftKeyboard =
-                            true,
+                            false,
 
                         forcedSize =
                             Pair(
@@ -691,6 +691,7 @@ fun TerminalScreen(
      * NORMAL ATLAS / UBUNTU TERMINAL
      * ------------------------------------------------
      */
+
     val prompt =
         terminalViewModel
             .prompt
@@ -930,15 +931,18 @@ fun TerminalScreen(
 
 /*
  * ------------------------------------------------
- * ATLAS MOBILE TERMINAL KEYBOARD
+ * ATLAS INTERACTIVE CONTROL BAR
  * ------------------------------------------------
  *
- * Device-validated two-row terminal control surface.
+ * Row 1:
  *
- * Do not replace this with the future full Atlas keyboard
- * until that keyboard has its own build and device
- * validation.
+ * CTRL  ESC  TAB  ←  ↑  ↓  →
+ *
+ * Row 2:
+ *
+ * CANCEL ^C  SAVE ^O  EXIT ^X  ENT  BKSP
  */
+
 @Composable
 private fun InteractiveTerminalKeyBar(
     modifier: Modifier = Modifier,
@@ -986,6 +990,9 @@ private fun InteractiveTerminalKeyBar(
                 )
         ) {
 
+            /*
+             * NAVIGATION / MODIFIER ROW
+             */
             Row(
                 modifier =
                     Modifier
@@ -1070,20 +1077,6 @@ private fun InteractiveTerminalKeyBar(
                             ),
 
                     label =
-                        "→",
-
-                    onClick =
-                        onArrowRight
-                )
-
-                TerminalKeyButton(
-                    modifier =
-                        Modifier
-                            .weight(
-                                1f
-                            ),
-
-                    label =
                         "↑",
 
                     onClick =
@@ -1103,8 +1096,25 @@ private fun InteractiveTerminalKeyBar(
                     onClick =
                         onArrowDown
                 )
+
+                TerminalKeyButton(
+                    modifier =
+                        Modifier
+                            .weight(
+                                1f
+                            ),
+
+                    label =
+                        "→",
+
+                    onClick =
+                        onArrowRight
+                )
             }
 
+            /*
+             * INTERACTIVE APPLICATION ACTION ROW
+             */
             Row(
                 modifier =
                     Modifier
@@ -1120,7 +1130,7 @@ private fun InteractiveTerminalKeyBar(
                     modifier =
                         Modifier
                             .weight(
-                                1f
+                                1.35f
                             ),
 
                     label =
@@ -1134,7 +1144,7 @@ private fun InteractiveTerminalKeyBar(
                     modifier =
                         Modifier
                             .weight(
-                                1f
+                                1.2f
                             ),
 
                     label =
@@ -1148,7 +1158,7 @@ private fun InteractiveTerminalKeyBar(
                     modifier =
                         Modifier
                             .weight(
-                                1f
+                                1.15f
                             ),
 
                     label =
@@ -1156,6 +1166,34 @@ private fun InteractiveTerminalKeyBar(
 
                     onClick =
                         onControlX
+                )
+
+                TerminalKeyButton(
+                    modifier =
+                        Modifier
+                            .weight(
+                                0.8f
+                            ),
+
+                    label =
+                        "ENT",
+
+                    onClick =
+                        onEnter
+                )
+
+                TerminalKeyButton(
+                    modifier =
+                        Modifier
+                            .weight(
+                                1f
+                            ),
+
+                    label =
+                        "BKSP",
+
+                    onClick =
+                        onBackspace
                 )
             }
         }
@@ -1194,7 +1232,10 @@ private fun TerminalKeyButton(
                 label,
 
             color =
-                UbuntuTerminalGreen
+                UbuntuTerminalGreen,
+
+            maxLines =
+                1
         )
     }
 }
