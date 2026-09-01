@@ -11,7 +11,7 @@ import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
 import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveSessionStartResult
 import com.noahrose.pocketlab.feature.terminal.completion.CommandCompletion
 import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
-import com.noahrose.pocketlab.feature.terminal.interactive.LinuxInteractiveTerminalBridge
+import com.noahrose.pocketlab.feature.terminal.interactive.LinuxInteractiveTerminalSessionController
 import com.noahrose.pocketlab.feature.terminal.startup.AtlasRcManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -33,48 +33,84 @@ class TerminalViewModel : ViewModel() {
 
     /*
      * ------------------------------------------------
-     * INTERACTIVE TERMINAL STATE
+     * INTERACTIVE TERMINAL UI STATE
      * ------------------------------------------------
+     *
+     * These values mirror the application-level
+     * LinuxInteractiveTerminalSessionController.
+     *
+     * The ViewModel no longer OWNS nano/vim.
+     *
+     * If Android recreates this ViewModel, the new
+     * instance simply reconnects to the existing
+     * controller state.
      */
     var interactiveSessionActive by mutableStateOf(
-        false
+        LinuxInteractiveTerminalSessionController
+            .isActive
     )
         private set
 
     var interactiveControlArmed by mutableStateOf(
-        false
+        LinuxInteractiveTerminalSessionController
+            .controlArmed
+            .value
     )
         private set
 
-    /*
-     * The bridge owns the PTY transport and terminal
-     * emulator.
-     *
-     * Ctrl state changes may originate from keyboard
-     * input processing, so route the Compose state update
-     * through viewModelScope.
-     */
-    private val interactiveBridge =
-        LinuxInteractiveTerminalBridge(
-            onControlArmedChanged = { armed ->
+    val interactiveTerminalEmulator:
+            TerminalEmulator
+        get() =
+            LinuxInteractiveTerminalSessionController
+                .terminalEmulator
 
-                viewModelScope
-                    .launch {
+    init {
+
+        loadStartupConfiguration()
+
+        /*
+         * Observe the application-level interactive
+         * session.
+         *
+         * StateFlow immediately supplies its current
+         * value, so a newly created ViewModel can restore
+         * the correct terminal UI without restarting the
+         * PTY application.
+         */
+        viewModelScope
+            .launch {
+
+                LinuxInteractiveTerminalSessionController
+                    .sessionActive
+                    .collect { active ->
+
+                        interactiveSessionActive =
+                            active
+
+                        if (
+                            !active
+                        ) {
+
+                            interactiveControlArmed =
+                                false
+
+                            commandRunning =
+                                false
+                        }
+                    }
+            }
+
+        viewModelScope
+            .launch {
+
+                LinuxInteractiveTerminalSessionController
+                    .controlArmed
+                    .collect { armed ->
 
                         interactiveControlArmed =
                             armed
                     }
             }
-        )
-
-    val interactiveTerminalEmulator:
-            TerminalEmulator
-        get() =
-            interactiveBridge
-                .terminalEmulator
-
-    init {
-        loadStartupConfiguration()
     }
 
     val linuxShellActive:
@@ -213,8 +249,8 @@ class TerminalViewModel : ViewModel() {
         }
 
         /*
-         * PTY applications are intercepted only from the
-         * real Ubuntu shell UI path.
+         * PTY applications are intercepted only from
+         * Ubuntu shell mode.
          */
         if (
             LinuxShellMode
@@ -336,6 +372,13 @@ class TerminalViewModel : ViewModel() {
      * ------------------------------------------------
      * INTERACTIVE COMMAND PATH
      * ------------------------------------------------
+     *
+     * TerminalViewModel starts the session, but ownership
+     * immediately belongs to the application-level
+     * controller.
+     *
+     * The ViewModel does NOT pump PTY output and does NOT
+     * terminate the session when it is destroyed.
      */
     private fun executeInteractiveCommand(
         command: String
@@ -359,9 +402,6 @@ class TerminalViewModel : ViewModel() {
                             commandLine
             )
 
-        interactiveControlArmed =
-            false
-
         commandRunning =
             true
 
@@ -373,7 +413,7 @@ class TerminalViewModel : ViewModel() {
                         Dispatchers.IO
                     ) {
 
-                        interactiveBridge
+                        LinuxInteractiveTerminalSessionController
                             .start(
                                 command
                             )
@@ -385,28 +425,16 @@ class TerminalViewModel : ViewModel() {
 
                     LinuxInteractiveSessionStartResult.Started -> {
 
+                        /*
+                         * Controller StateFlow becomes true
+                         * and TerminalScreen switches to the
+                         * existing full-screen emulator.
+                         */
                         interactiveSessionActive =
                             true
 
                         commandRunning =
                             false
-
-                        try {
-
-                            interactiveBridge
-                                .pumpOutput()
-
-                        } finally {
-
-                            interactiveSessionActive =
-                                false
-
-                            interactiveControlArmed =
-                                false
-
-                            commandRunning =
-                                false
-                        }
                     }
 
                     is LinuxInteractiveSessionStartResult.Failure -> {
@@ -439,13 +467,8 @@ class TerminalViewModel : ViewModel() {
 
     /*
      * ------------------------------------------------
-     * ATLAS TERMINAL KEYBOARD
+     * ATLAS MOBILE TERMINAL KEYBOARD
      * ------------------------------------------------
-     *
-     * These methods are the only interface the Compose
-     * terminal control bar needs.
-     *
-     * The UI never writes directly to the Linux process.
      */
 
     fun toggleInteractiveControl() {
@@ -457,9 +480,8 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveControlArmed =
-            interactiveBridge
-                .toggleControlArmed()
+        LinuxInteractiveTerminalSessionController
+            .toggleControlArmed()
     }
 
     fun sendInteractiveEscape() {
@@ -471,7 +493,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendEscape()
     }
 
@@ -484,7 +506,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendTab()
     }
 
@@ -497,7 +519,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendEnter()
     }
 
@@ -510,7 +532,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendBackspace()
     }
 
@@ -523,7 +545,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendArrowLeft()
     }
 
@@ -536,7 +558,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendArrowUp()
     }
 
@@ -549,7 +571,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendArrowDown()
     }
 
@@ -562,23 +584,10 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendArrowRight()
     }
 
-    /*
-     * ------------------------------------------------
-     * DIRECT CTRL SHORTCUT
-     * ------------------------------------------------
-     *
-     * Useful later for dedicated buttons such as:
-     *
-     *     ^C
-     *     ^X
-     *     ^O
-     *
-     * without requiring the one-shot modifier.
-     */
     fun sendInteractiveControl(
         character: Char
     ) {
@@ -590,7 +599,7 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
-        interactiveBridge
+        LinuxInteractiveTerminalSessionController
             .sendControl(
                 character
             )
@@ -598,8 +607,10 @@ class TerminalViewModel : ViewModel() {
 
     /*
      * ------------------------------------------------
-     * MANUAL INTERACTIVE STOP
+     * EXPLICIT INTERACTIVE STOP
      * ------------------------------------------------
+     *
+     * This is intentionally NOT tied to onCleared().
      */
     fun stopInteractiveSession() {
 
@@ -617,7 +628,7 @@ class TerminalViewModel : ViewModel() {
                     Dispatchers.IO
                 ) {
 
-                    interactiveBridge
+                    LinuxInteractiveTerminalSessionController
                         .stop()
                 }
 
@@ -632,11 +643,13 @@ class TerminalViewModel : ViewModel() {
             }
     }
 
-    override fun onCleared() {
-
-        interactiveBridge
-            .stop()
-
-        super.onCleared()
-    }
+    /*
+     * IMPORTANT:
+     *
+     * There is deliberately NO onCleared() override here.
+     *
+     * ViewModel destruction is a UI lifecycle event.
+     * It is not permission to destroy the user's active
+     * Ubuntu terminal application.
+     */
 }
