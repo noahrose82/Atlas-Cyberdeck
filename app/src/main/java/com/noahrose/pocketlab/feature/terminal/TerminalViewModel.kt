@@ -6,13 +6,18 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.noahrose.pocketlab.feature.filesystem.VirtualFileSystem
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxInteractiveCommandGuard
 import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
+import com.noahrose.pocketlab.feature.linux.runtime.process.LinuxInteractiveSessionStartResult
 import com.noahrose.pocketlab.feature.terminal.completion.CommandCompletion
+import com.noahrose.pocketlab.feature.terminal.history.CommandHistory
+import com.noahrose.pocketlab.feature.terminal.interactive.LinuxInteractiveTerminalBridge
 import com.noahrose.pocketlab.feature.terminal.startup.AtlasRcManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.connectbot.terminal.TerminalEmulator
 
 class TerminalViewModel : ViewModel() {
 
@@ -25,6 +30,48 @@ class TerminalViewModel : ViewModel() {
         false
     )
         private set
+
+    /*
+     * ------------------------------------------------
+     * INTERACTIVE TERMINAL STATE
+     * ------------------------------------------------
+     */
+    var interactiveSessionActive by mutableStateOf(
+        false
+    )
+        private set
+
+    var interactiveControlArmed by mutableStateOf(
+        false
+    )
+        private set
+
+    /*
+     * The bridge owns the PTY transport and terminal
+     * emulator.
+     *
+     * Ctrl state changes may originate from keyboard
+     * input processing, so route the Compose state update
+     * through viewModelScope.
+     */
+    private val interactiveBridge =
+        LinuxInteractiveTerminalBridge(
+            onControlArmedChanged = { armed ->
+
+                viewModelScope
+                    .launch {
+
+                        interactiveControlArmed =
+                            armed
+                    }
+            }
+        )
+
+    val interactiveTerminalEmulator:
+            TerminalEmulator
+        get() =
+            interactiveBridge
+                .terminalEmulator
 
     init {
         loadStartupConfiguration()
@@ -89,6 +136,13 @@ class TerminalViewModel : ViewModel() {
         command: String
     ) {
 
+        if (
+            interactiveSessionActive
+        ) {
+
+            return
+        }
+
         uiState =
             uiState.copy(
                 currentCommand =
@@ -98,13 +152,16 @@ class TerminalViewModel : ViewModel() {
 
     fun completeCommand() {
 
-        /*
-         * Atlas completion must not rewrite commands
-         * while the real Ubuntu shell owns the input.
-         */
         if (
             LinuxShellMode
                 .isActive()
+        ) {
+
+            return
+        }
+
+        if (
+            interactiveSessionActive
         ) {
 
             return
@@ -132,17 +189,12 @@ class TerminalViewModel : ViewModel() {
      * ------------------------------------------------
      * COMMAND EXECUTION
      * ------------------------------------------------
-     *
-     * TerminalCommandProcessor runs on Dispatchers.IO.
-     *
-     * A per-command Channel transports live guest
-     * output back to the main thread while apt/dpkg
-     * is still running.
      */
     fun executeCommand() {
 
         if (
-            commandRunning
+            commandRunning ||
+            interactiveSessionActive
         ) {
 
             return
@@ -160,16 +212,45 @@ class TerminalViewModel : ViewModel() {
             return
         }
 
+        /*
+         * PTY applications are intercepted only from the
+         * real Ubuntu shell UI path.
+         */
+        if (
+            LinuxShellMode
+                .isActive() &&
+            LinuxInteractiveCommandGuard
+                .requiresPty(
+                    command
+                )
+        ) {
+
+            executeInteractiveCommand(
+                command
+            )
+
+            return
+        }
+
+        executeNormalCommand(
+            command
+        )
+    }
+
+    /*
+     * ------------------------------------------------
+     * NORMAL COMMAND PATH
+     * ------------------------------------------------
+     */
+    private fun executeNormalCommand(
+        command: String
+    ) {
+
         val startingOutput =
             uiState
                 .output
                 .toList()
 
-        /*
-         * Clear the input immediately so the terminal
-         * acknowledges Enter without waiting for the
-         * guest command to finish.
-         */
         uiState =
             uiState.copy(
                 currentCommand =
@@ -188,10 +269,6 @@ class TerminalViewModel : ViewModel() {
                             Channel.UNLIMITED
                     )
 
-                /*
-                 * Runs on the main thread and updates
-                 * Compose state one line at a time.
-                 */
                 val liveOutputJob =
                     launch {
 
@@ -238,11 +315,6 @@ class TerminalViewModel : ViewModel() {
                         output
                     }
 
-                /*
-                 * Drain every queued line before the
-                 * final canonical output list replaces
-                 * the temporary streamed UI state.
-                 */
                 liveOutput
                     .close()
 
@@ -258,5 +330,313 @@ class TerminalViewModel : ViewModel() {
                 commandRunning =
                     false
             }
+    }
+
+    /*
+     * ------------------------------------------------
+     * INTERACTIVE COMMAND PATH
+     * ------------------------------------------------
+     */
+    private fun executeInteractiveCommand(
+        command: String
+    ) {
+
+        CommandHistory
+            .add(
+                command
+            )
+
+        val commandLine =
+            "${LinuxShellMode.getPrompt()} $command"
+
+        uiState =
+            uiState.copy(
+                currentCommand =
+                    "",
+
+                output =
+                    uiState.output +
+                            commandLine
+            )
+
+        interactiveControlArmed =
+            false
+
+        commandRunning =
+            true
+
+        viewModelScope
+            .launch {
+
+                val startResult =
+                    withContext(
+                        Dispatchers.IO
+                    ) {
+
+                        interactiveBridge
+                            .start(
+                                command
+                            )
+                    }
+
+                when (
+                    startResult
+                ) {
+
+                    LinuxInteractiveSessionStartResult.Started -> {
+
+                        interactiveSessionActive =
+                            true
+
+                        commandRunning =
+                            false
+
+                        try {
+
+                            interactiveBridge
+                                .pumpOutput()
+
+                        } finally {
+
+                            interactiveSessionActive =
+                                false
+
+                            interactiveControlArmed =
+                                false
+
+                            commandRunning =
+                                false
+                        }
+                    }
+
+                    is LinuxInteractiveSessionStartResult.Failure -> {
+
+                        interactiveSessionActive =
+                            false
+
+                        interactiveControlArmed =
+                            false
+
+                        commandRunning =
+                            false
+
+                        uiState =
+                            uiState.copy(
+                                output =
+                                    uiState.output +
+                                            listOf(
+                                                "Interactive Ubuntu session could not start.",
+                                                "Why: ${startResult.message}",
+                                                "Atlas did not modify your Ubuntu files.",
+                                                "Return to the Atlas shell and check 'safety status' and 'linux status'.",
+                                                "Error code: ATLAS-LINUX-PTY-START"
+                                            )
+                            )
+                    }
+                }
+            }
+    }
+
+    /*
+     * ------------------------------------------------
+     * ATLAS TERMINAL KEYBOARD
+     * ------------------------------------------------
+     *
+     * These methods are the only interface the Compose
+     * terminal control bar needs.
+     *
+     * The UI never writes directly to the Linux process.
+     */
+
+    fun toggleInteractiveControl() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveControlArmed =
+            interactiveBridge
+                .toggleControlArmed()
+    }
+
+    fun sendInteractiveEscape() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendEscape()
+    }
+
+    fun sendInteractiveTab() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendTab()
+    }
+
+    fun sendInteractiveEnter() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendEnter()
+    }
+
+    fun sendInteractiveBackspace() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendBackspace()
+    }
+
+    fun sendInteractiveArrowLeft() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendArrowLeft()
+    }
+
+    fun sendInteractiveArrowUp() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendArrowUp()
+    }
+
+    fun sendInteractiveArrowDown() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendArrowDown()
+    }
+
+    fun sendInteractiveArrowRight() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendArrowRight()
+    }
+
+    /*
+     * ------------------------------------------------
+     * DIRECT CTRL SHORTCUT
+     * ------------------------------------------------
+     *
+     * Useful later for dedicated buttons such as:
+     *
+     *     ^C
+     *     ^X
+     *     ^O
+     *
+     * without requiring the one-shot modifier.
+     */
+    fun sendInteractiveControl(
+        character: Char
+    ) {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        interactiveBridge
+            .sendControl(
+                character
+            )
+    }
+
+    /*
+     * ------------------------------------------------
+     * MANUAL INTERACTIVE STOP
+     * ------------------------------------------------
+     */
+    fun stopInteractiveSession() {
+
+        if (
+            !interactiveSessionActive
+        ) {
+
+            return
+        }
+
+        viewModelScope
+            .launch {
+
+                withContext(
+                    Dispatchers.IO
+                ) {
+
+                    interactiveBridge
+                        .stop()
+                }
+
+                interactiveSessionActive =
+                    false
+
+                interactiveControlArmed =
+                    false
+
+                commandRunning =
+                    false
+            }
+    }
+
+    override fun onCleared() {
+
+        interactiveBridge
+            .stop()
+
+        super.onCleared()
     }
 }

@@ -136,6 +136,18 @@ dependencies {
         "org.apache.commons:commons-compress:1.28.0"
     )
 
+    /*
+     * Full terminal emulation for interactive Ubuntu
+     * applications such as nano, vim, less, and top.
+     *
+     * Atlas will feed raw PTY output into this terminal
+     * renderer rather than attempting to display ANSI
+     * control sequences as normal text lines.
+     */
+    implementation(
+        "org.connectbot:termlib:0.1.0"
+    )
+
     testImplementation(
         "junit:junit:4.13.2"
     )
