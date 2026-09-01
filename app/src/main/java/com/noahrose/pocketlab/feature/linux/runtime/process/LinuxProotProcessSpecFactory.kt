@@ -10,7 +10,11 @@ object LinuxProotProcessSpecFactory {
             LinuxProotProcessSpecResult {
 
         /*
-         * Resolve Atlas Linux runtime paths.
+         * Resolve Atlas runtime storage.
+         *
+         * LinuxRuntimePathManager fails explicitly when
+         * initialization has not occurred, so convert
+         * that condition into a normal backend failure.
          */
         val runtimePaths =
             try {
@@ -35,8 +39,8 @@ object LinuxProotProcessSpecFactory {
                 .rootfsDirectory
 
         /*
-         * Ubuntu RootFS must already exist before
-         * Atlas attempts to launch PRoot.
+         * A provisioned Ubuntu root filesystem must exist
+         * before PRoot startup can proceed.
          */
         if (
             !rootfsDirectory.exists() ||
@@ -52,7 +56,10 @@ object LinuxProotProcessSpecFactory {
         }
 
         /*
-         * Verify the guest shell.
+         * Verify that the guest shell actually exists.
+         *
+         * Atlas keeps one persistent shell process alive
+         * and communicates with it through stdin/stdout.
          */
         val guestShell =
             File(
@@ -76,8 +83,8 @@ object LinuxProotProcessSpecFactory {
         /*
          * Main Atlas PRoot executable.
          *
-         * Android extracts this native library into the
-         * application's executable native-library directory.
+         * This executable lives in Android's extracted
+         * native-library directory.
          */
         val prootExecutable =
             LinuxNativeRuntimeResolver
@@ -120,7 +127,11 @@ object LinuxProotProcessSpecFactory {
         }
 
         /*
-         * PRoot loader.
+         * External PRoot loader.
+         *
+         * Android permits execution from the application's
+         * extracted native-library directory, so Atlas keeps
+         * the loader there as well.
          */
         val prootLoader =
             LinuxNativeRuntimeResolver
@@ -164,8 +175,12 @@ object LinuxProotProcessSpecFactory {
 
         /*
          * ------------------------------------------------
-         * PROOT TEMP STORAGE
+         * PROOT TEMPORARY STORAGE
          * ------------------------------------------------
+         *
+         * This directory belongs to PRoot itself.
+         *
+         * It is deliberately separate from Ubuntu /tmp.
          */
         val prootTemporaryDirectory =
             runtimePaths
@@ -190,8 +205,20 @@ object LinuxProotProcessSpecFactory {
          * LINK-TO-SYMLINK STORAGE
          * ------------------------------------------------
          *
-         * Required for Debian package filesystem behavior
-         * under PRoot on Android.
+         * Android application storage does not provide
+         * normal Linux hard-link semantics required by
+         * Debian package operations.
+         *
+         * PRoot --link2symlink translates hard-link
+         * operations into PRoot-managed symbolic links.
+         *
+         * PROOT_L2S_DIR stores the backing objects used
+         * by that emulation.
+         *
+         * IMPORTANT:
+         *
+         * Never casually delete this directory.
+         * Installed packages may depend on its contents.
          */
         val link2SymlinkDirectory =
             File(
@@ -214,7 +241,67 @@ object LinuxProotProcessSpecFactory {
         }
 
         /*
-         * Guest /root.
+         * ------------------------------------------------
+         * GUEST-VISIBLE L2S MIRROR
+         * ------------------------------------------------
+         *
+         * PROOT_L2S_DIR contains an Android host absolute
+         * path, for example:
+         *
+         * /data/user/0/.../linux/rootfs/.l2s
+         *
+         * PRoot's link2symlink implementation can write
+         * symbolic-link targets containing that absolute
+         * path.
+         *
+         * Once PRoot changes the visible root to Ubuntu,
+         * that Android path does not automatically exist
+         * inside the guest.
+         *
+         * Therefore create the guest-side destination tree
+         * before installing the self-bind below.
+         *
+         * Example guest-visible backing location:
+         *
+         * rootfs/
+         *   data/
+         *     user/
+         *       0/
+         *         .../
+         *           linux/
+         *             rootfs/
+         *               .l2s/
+         *
+         * The actual contents are supplied by PRoot's bind.
+         */
+        val link2SymlinkGuestMirror =
+            File(
+                rootfsDirectory,
+                link2SymlinkDirectory
+                    .absolutePath
+                    .removePrefix(
+                        File.separator
+                    )
+            )
+
+        if (
+            !ensureDirectory(
+                link2SymlinkGuestMirror
+            )
+        ) {
+
+            return LinuxProotProcessSpecResult
+                .Failure(
+                    message =
+                        "Unable to prepare the guest-visible PRoot " +
+                                "link-to-symlink path: " +
+                                link2SymlinkGuestMirror.absolutePath
+                )
+        }
+
+        /*
+         * Ensure the guest's normal working directory is
+         * available.
          */
         val guestRootDirectory =
             File(
@@ -237,7 +324,10 @@ object LinuxProotProcessSpecFactory {
         }
 
         /*
-         * Guest /tmp.
+         * Ensure Ubuntu /tmp exists.
+         *
+         * Guest /tmp and PRoot's host temporary directory
+         * intentionally remain separate.
          */
         val guestTemporaryDirectory =
             File(
@@ -260,8 +350,8 @@ object LinuxProotProcessSpecFactory {
         }
 
         /*
-         * PRoot native libraries live beside the
-         * executable.
+         * Native libraries used by PRoot live beside the
+         * executable in Android's native-library directory.
          */
         val nativeLibraryDirectory =
             prootExecutable
@@ -269,8 +359,7 @@ object LinuxProotProcessSpecFactory {
 
         if (
             nativeLibraryDirectory == null ||
-            !nativeLibraryDirectory.exists() ||
-            !nativeLibraryDirectory.isDirectory
+            !nativeLibraryDirectory.exists()
         ) {
 
             return LinuxProotProcessSpecResult
@@ -284,28 +373,38 @@ object LinuxProotProcessSpecFactory {
          * ------------------------------------------------
          * PROOT ARGUMENTS
          * ------------------------------------------------
+         *
+         * -0
+         *     Present guest processes as root.
+         *
+         * --link2symlink
+         *     Emulate hard links using PRoot-managed
+         *     symbolic-link storage.
+         *
+         * -r
+         *     Use the provisioned Ubuntu rootfs.
+         *
+         * -b
+         *     Expose required Android/kernel paths.
+         *
+         * -w
+         *     Enter Ubuntu at /root.
+         *
+         * /bin/sh
+         *     Keep a persistent guest shell alive for the
+         *     Atlas command bridge.
          */
         val arguments =
             buildList {
 
-                /*
-                 * Present the guest as UID 0.
-                 */
                 add(
                     "-0"
                 )
 
-                /*
-                 * Required for package filesystem
-                 * compatibility.
-                 */
                 add(
                     "--link2symlink"
                 )
 
-                /*
-                 * Ubuntu root filesystem.
-                 */
                 add(
                     "-r"
                 )
@@ -315,9 +414,6 @@ object LinuxProotProcessSpecFactory {
                         .absolutePath
                 )
 
-                /*
-                 * Android kernel/device interfaces.
-                 */
                 add(
                     "-b"
                 )
@@ -343,8 +439,22 @@ object LinuxProotProcessSpecFactory {
                 )
 
                 /*
-                 * Start Ubuntu in /root.
+                 * Keep PRoot's absolute L2S backing path
+                 * reachable at the SAME absolute path from
+                 * inside Ubuntu.
+                 *
+                 * The guest destination tree was explicitly
+                 * created above before this bind is added.
                  */
+                add(
+                    "-b"
+                )
+
+                add(
+                    "${link2SymlinkDirectory.absolutePath}:" +
+                            link2SymlinkDirectory.absolutePath
+                )
+
                 add(
                     "-w"
                 )
@@ -353,9 +463,6 @@ object LinuxProotProcessSpecFactory {
                     "/root"
                 )
 
-                /*
-                 * Persistent guest shell used by Atlas.
-                 */
                 add(
                     "/bin/sh"
                 )
@@ -363,12 +470,11 @@ object LinuxProotProcessSpecFactory {
 
         /*
          * ------------------------------------------------
-         * PROOT ENVIRONMENT
+         * PROOT / UBUNTU ENVIRONMENT
          * ------------------------------------------------
          */
         val environment =
             mapOf(
-
                 "PROOT_LOADER" to
                         prootLoader.absolutePath,
 
@@ -419,9 +525,9 @@ object LinuxProotProcessSpecFactory {
                             arguments,
 
                         /*
-                         * ProotLinuxRuntimeBackend uses this
-                         * directory for Ubuntu DNS sync before
-                         * launch.
+                         * The backend intentionally uses
+                         * this host path to locate the
+                         * Ubuntu rootfs for DNS sync.
                          */
                         workingDirectory =
                             rootfsDirectory,
@@ -446,10 +552,12 @@ object LinuxProotProcessSpecFactory {
 
         return runCatching {
 
-            directory.mkdirs()
+            directory
+                .mkdirs()
 
         }.getOrDefault(
             false
         )
     }
 }
+

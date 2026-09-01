@@ -2,6 +2,35 @@ package com.noahrose.pocketlab.feature.linux.runtime.safety
 
 object LinuxRuntimeRecoveryPolicy {
 
+    /*
+     * Debian package names permitted by read-only
+     * recovery diagnostics.
+     */
+    private val packageNamePattern =
+        Regex(
+            "^[a-z0-9][a-z0-9+.-]*(?::[a-z0-9][a-z0-9-]*)?$"
+        )
+
+    /*
+     * Safe read-only commands available while
+     * RECOVERY_ARMED is active.
+     */
+    private val exactReadOnlyCommands =
+        setOf(
+            "pwd",
+            "whoami",
+            "id",
+
+            "uname",
+            "uname -a",
+            "uname -m",
+            "uname -n",
+            "uname -r",
+            "uname -s",
+
+            "cat /etc/os-release"
+        )
+
     fun isAllowedInRecovery(
         command: String
     ): Boolean {
@@ -14,48 +43,37 @@ object LinuxRuntimeRecoveryPolicy {
         if (
             normalized.isBlank()
         ) {
-
             return false
         }
 
         return when {
 
-            normalized ==
-                    "pwd" ->
-                true
-
-            normalized ==
-                    "whoami" ->
-                true
-
-            normalized ==
-                    "id" ->
-                true
-
-            normalized ==
-                    "uname" ||
-                    normalized.startsWith(
-                        "uname "
-                    ) ->
-                true
-
-            normalized ==
-                    "cat /etc/os-release" ->
+            normalized in
+                    exactReadOnlyCommands ->
                 true
 
             /*
-             * Audit is allowed for diagnostics, but it
-             * MUST NOT clear recovery mode by itself.
+             * Package database audit is diagnostic only.
              *
-             * A clean dpkg database does not prove that
-             * the preceding repair operation succeeded.
+             * It cannot clear the recovery latch.
              */
             normalized ==
                     "dpkg --audit" ->
                 true
 
+            /*
+             * Safe package metadata inspection.
+             */
+            isReadOnlyPackageDiagnostic(
+                command
+            ) ->
+                true
+
+            /*
+             * Explicit package repair operations.
+             */
             isRepairOperation(
-                normalized
+                command
             ) ->
                 true
 
@@ -75,16 +93,22 @@ object LinuxRuntimeRecoveryPolicy {
 
         return normalized ==
                 "dpkg --configure -a" ||
+
                 normalized ==
                 "dpkg --configure --pending" ||
+
                 normalized ==
                 "apt --fix-broken install -y" ||
+
                 normalized ==
                 "apt --fix-broken install --assume-yes" ||
+
                 normalized ==
                 "apt-get -f install -y" ||
+
                 normalized ==
                 "apt-get --fix-broken install -y" ||
+
                 normalized ==
                 "apt-get --fix-broken install --assume-yes"
     }
@@ -100,13 +124,100 @@ object LinuxRuntimeRecoveryPolicy {
     }
 
     /*
-     * Detect a post-transaction package integrity failure
-     * emitted by LinuxPackageCommandPolicy.
+     * Read-only package diagnostics permitted during
+     * controlled recovery.
      *
-     * A package command can fail while dpkg --audit is
-     * still clean. That is NOT an integrity failure; the
-     * original non-zero command exit code remains the
-     * authoritative transaction result.
+     * Examples:
+     *
+     * dpkg -s libc6
+     * dpkg --status perl-base
+     * dpkg -L vim-runtime
+     * dpkg --listfiles nano
+     * dpkg -V perl-base
+     * dpkg --verify libc6
+     */
+    private fun isReadOnlyPackageDiagnostic(
+        command: String
+    ): Boolean {
+
+        val normalizedWhitespace =
+            normalizeWhitespace(
+                command
+            )
+
+        val parts =
+            normalizedWhitespace
+                .split(" ")
+
+        if (
+            parts.size != 3
+        ) {
+            return false
+        }
+
+        val executable =
+            parts[0]
+
+        val option =
+            parts[1]
+
+        val packageName =
+            parts[2]
+
+        if (
+            !executable.equals(
+                "dpkg",
+                ignoreCase = true
+            )
+        ) {
+            return false
+        }
+
+        /*
+         * dpkg short options are case-sensitive.
+         */
+        val allowedOption =
+            option ==
+                    "-s" ||
+
+                    option ==
+                    "--status" ||
+
+                    option ==
+                    "-L" ||
+
+                    option ==
+                    "--listfiles" ||
+
+                    option ==
+                    "-V" ||
+
+                    option ==
+                    "--verify"
+
+        if (
+            !allowedOption
+        ) {
+            return false
+        }
+
+        /*
+         * Require one valid Debian-style package name.
+         *
+         * This prevents paths, redirection, pipes,
+         * substitutions, and additional shell syntax
+         * from passing through the recovery policy.
+         */
+        return packageName ==
+                packageName.lowercase() &&
+                packageNamePattern.matches(
+                    packageName
+                )
+    }
+
+    /*
+     * Detect package-integrity failures produced by
+     * Atlas package transaction auditing.
      */
     fun detectPackageIntegrityFailure(
         errorOutput: String
@@ -141,13 +252,12 @@ object LinuxRuntimeRecoveryPolicy {
     /*
      * Recovery may clear ONLY when:
      *
-     * 1. the command was an actual repair operation,
-     * 2. that repair command exited successfully, and
-     * 3. Atlas' automatic post-transaction dpkg audit
-     *    reported CLEAN.
+     * 1. an approved repair operation ran,
+     * 2. that operation exited successfully, and
+     * 3. Atlas' automatic package audit reported CLEAN.
      *
-     * `dpkg --audit` by itself is diagnostic only and
-     * can never clear the recovery latch.
+     * Read-only diagnostics and dpkg --audit alone
+     * can never clear recovery mode.
      */
     fun recoveryVerified(
         command: String,
@@ -159,7 +269,6 @@ object LinuxRuntimeRecoveryPolicy {
         if (
             exitCode != 0
         ) {
-
             return false
         }
 
@@ -168,7 +277,6 @@ object LinuxRuntimeRecoveryPolicy {
                 command
             )
         ) {
-
             return false
         }
 
@@ -183,12 +291,20 @@ object LinuxRuntimeRecoveryPolicy {
         command: String
     ): String {
 
+        return normalizeWhitespace(
+            command
+        ).lowercase()
+    }
+
+    private fun normalizeWhitespace(
+        command: String
+    ): String {
+
         return command
             .trim()
             .replace(
                 Regex("\\s+"),
                 " "
             )
-            .lowercase()
     }
 }
