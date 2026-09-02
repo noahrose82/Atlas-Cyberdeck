@@ -18,8 +18,8 @@ android {
         minSdk = 29
         targetSdk = 36
 
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 13
+        versionName = "0.13.0-alpha"
 
         testInstrumentationRunner =
             "androidx.test.runner.AndroidJUnitRunner"
@@ -137,10 +137,10 @@ dependencies {
     )
 
     /*
-     * Full terminal emulation for interactive Ubuntu
-     * applications such as nano, vim, less, and top.
+     * Full terminal emulation for validated interactive
+     * Ubuntu applications such as nano and vim.
      *
-     * Atlas will feed raw PTY output into this terminal
+     * Atlas feeds raw PTY output into this terminal
      * renderer rather than attempting to display ANSI
      * control sequences as normal text lines.
      */

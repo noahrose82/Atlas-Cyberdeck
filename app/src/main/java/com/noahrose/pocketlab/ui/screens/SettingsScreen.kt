@@ -8,7 +8,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -37,16 +36,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.noahrose.pocketlab.R
 import com.noahrose.pocketlab.feature.settings.AtlasSettingsRepository
-import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(
@@ -646,7 +642,7 @@ private fun AboutAtlasCard(
 
                     Text(
                         text =
-                            "Open Source"
+                            "Licenses"
                     )
                 }
             }
@@ -666,26 +662,17 @@ private fun SettingsCatWalk() {
                 )
     ) {
 
-        val density =
-            LocalDensity.current
-
         val catWidth =
             30.dp
 
         val travelDistance =
-            with(
-                density
-            ) {
-
-                (
-                        maxWidth -
-                                catWidth
-                        )
-                    .toPx()
-                    .coerceAtLeast(
-                        0f
+            (
+                    maxWidth -
+                            catWidth
                     )
-            }
+                .coerceAtLeast(
+                    0.dp
+                )
 
         val transition =
             rememberInfiniteTransition(
@@ -693,20 +680,20 @@ private fun SettingsCatWalk() {
                     "atlasCatWalk"
             )
 
-        val catPosition by
+        val progress by
         transition.animateFloat(
             initialValue =
                 0f,
 
             targetValue =
-                travelDistance,
+                1f,
 
             animationSpec =
                 infiniteRepeatable(
                     animation =
                         tween(
                             durationMillis =
-                                14000,
+                                10000,
 
                             easing =
                                 LinearEasing
@@ -717,8 +704,14 @@ private fun SettingsCatWalk() {
                 ),
 
             label =
-                "atlasCatPosition"
+                "atlasCatProgress"
         )
+
+        val catOffset =
+            (
+                    travelDistance.value *
+                            progress
+                    ).dp
 
         Text(
             text =
@@ -726,17 +719,13 @@ private fun SettingsCatWalk() {
 
             modifier =
                 Modifier
-                    .offset {
+                    .offset(
+                        x =
+                            catOffset,
 
-                        IntOffset(
-                            x =
-                                catPosition
-                                    .roundToInt(),
-
-                            y =
-                                0
-                        )
-                    },
+                        y =
+                            0.dp
+                    ),
 
             fontSize =
                 20.sp
