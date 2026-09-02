@@ -43,34 +43,50 @@ fun AtlasTerminalKeyboard(
         )
     }
 
-    fun sendCharacter(
+    var symbolMode by
+    remember {
+        mutableStateOf(
+            false
+        )
+    }
+
+    fun sendLetter(
         character: Char
     ) {
 
-        val outputCharacter =
+        val output =
             if (
-                shiftActive &&
-                character.isLetter()
+                shiftActive
             ) {
 
-                character.uppercaseChar()
+                character
+                    .uppercaseChar()
+                    .toString()
 
             } else {
 
                 character
+                    .toString()
             }
 
         onText(
-            outputCharacter.toString()
+            output
         )
 
-        if (
-            shiftActive
-        ) {
+        /*
+         * SHIFT is one-shot.
+         */
+        shiftActive =
+            false
+    }
 
-            shiftActive =
-                false
-        }
+    fun sendSymbol(
+        symbol: String
+    ) {
+
+        onText(
+            symbol
+        )
     }
 
     Surface(
@@ -81,265 +97,534 @@ fun AtlasTerminalKeyboard(
             Color.Black
     ) {
 
-        Column(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .padding(
-                        horizontal =
-                            4.dp,
-
-                        vertical =
-                            4.dp
-                    ),
-
-            verticalArrangement =
-                Arrangement.spacedBy(
-                    3.dp
-                )
+        if (
+            symbolMode
         ) {
 
-            /*
-             * NUMBER ROW
-             */
-            AtlasKeyboardCharacterRow(
-                characters =
-                    "1234567890",
+            AtlasSymbolKeyboard(
+                onText = { symbol ->
 
-                shiftActive =
-                    false,
-
-                onCharacter = { character ->
-
-                    sendCharacter(
-                        character
+                    sendSymbol(
+                        symbol
                     )
+                },
+
+                onBackspace =
+                    onBackspace,
+
+                onEnter =
+                    onEnter,
+
+                onAlphabetMode = {
+
+                    symbolMode =
+                        false
                 }
             )
 
-            /*
-             * QWERTY ROW
-             */
-            AtlasKeyboardCharacterRow(
-                characters =
-                    "qwertyuiop",
+        } else {
 
+            AtlasAlphabetKeyboard(
                 shiftActive =
                     shiftActive,
 
-                onCharacter = { character ->
+                onLetter = { character ->
 
-                    sendCharacter(
+                    sendLetter(
                         character
                     )
+                },
+
+                onText =
+                    onText,
+
+                onBackspace =
+                    onBackspace,
+
+                onEnter =
+                    onEnter,
+
+                onShift = {
+
+                    shiftActive =
+                        !shiftActive
+                },
+
+                onSymbolMode = {
+
+                    shiftActive =
+                        false
+
+                    symbolMode =
+                        true
                 }
             )
-
-            /*
-             * HOME ROW
-             */
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal =
-                                10.dp
-                        ),
-
-                horizontalArrangement =
-                    Arrangement.spacedBy(
-                        3.dp
-                    )
-            ) {
-
-                "asdfghjkl"
-                    .forEach { character ->
-
-                        AtlasTerminalKeyboardKey(
-                            modifier =
-                                Modifier
-                                    .weight(
-                                        1f
-                                    ),
-
-                            label =
-                                if (
-                                    shiftActive
-                                ) {
-
-                                    character
-                                        .uppercaseChar()
-                                        .toString()
-
-                                } else {
-
-                                    character
-                                        .toString()
-                                },
-
-                            onClick = {
-
-                                sendCharacter(
-                                    character
-                                )
-                            }
-                        )
-                    }
-            }
-
-            /*
-             * SHIFT + BOTTOM LETTER ROW
-             */
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth(),
-
-                horizontalArrangement =
-                    Arrangement.spacedBy(
-                        3.dp
-                    )
-            ) {
-
-                AtlasTerminalKeyboardKey(
-                    modifier =
-                        Modifier
-                            .weight(
-                                1.4f
-                            ),
-
-                    label =
-                        if (
-                            shiftActive
-                        ) {
-
-                            "SHIFT*"
-
-                        } else {
-
-                            "SHIFT"
-                        },
-
-                    onClick = {
-
-                        shiftActive =
-                            !shiftActive
-                    }
-                )
-
-                "zxcvbnm"
-                    .forEach { character ->
-
-                        AtlasTerminalKeyboardKey(
-                            modifier =
-                                Modifier
-                                    .weight(
-                                        1f
-                                    ),
-
-                            label =
-                                if (
-                                    shiftActive
-                                ) {
-
-                                    character
-                                        .uppercaseChar()
-                                        .toString()
-
-                                } else {
-
-                                    character
-                                        .toString()
-                                },
-
-                            onClick = {
-
-                                sendCharacter(
-                                    character
-                                )
-                            }
-                        )
-                    }
-
-                AtlasTerminalKeyboardKey(
-                    modifier =
-                        Modifier
-                            .weight(
-                                1.4f
-                            ),
-
-                    label =
-                        "BKSP",
-
-                    onClick =
-                        onBackspace
-                )
-            }
-
-            /*
-             * SPACE / ENTER ROW
-             */
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth(),
-
-                horizontalArrangement =
-                    Arrangement.spacedBy(
-                        3.dp
-                    )
-            ) {
-
-                AtlasTerminalKeyboardKey(
-                    modifier =
-                        Modifier
-                            .weight(
-                                4f
-                            ),
-
-                    label =
-                        "SPACE",
-
-                    onClick = {
-
-                        onText(
-                            " "
-                        )
-
-                        shiftActive =
-                            false
-                    }
-                )
-
-                AtlasTerminalKeyboardKey(
-                    modifier =
-                        Modifier
-                            .weight(
-                                1.5f
-                            ),
-
-                    label =
-                        "ENT",
-
-                    onClick = {
-
-                        onEnter()
-
-                        shiftActive =
-                            false
-                    }
-                )
-            }
         }
     }
 }
 
 @Composable
-private fun AtlasKeyboardCharacterRow(
-    characters: String,
+private fun AtlasAlphabetKeyboard(
     shiftActive: Boolean,
-    onCharacter: (Char) -> Unit
+    onLetter: (Char) -> Unit,
+    onText: (String) -> Unit,
+    onBackspace: () -> Unit,
+    onEnter: () -> Unit,
+    onShift: () -> Unit,
+    onSymbolMode: () -> Unit
+) {
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal =
+                        3.dp,
+
+                    vertical =
+                        3.dp
+                ),
+
+        verticalArrangement =
+            Arrangement.spacedBy(
+                3.dp
+            )
+    ) {
+
+        /*
+         * NUMBER ROW
+         */
+        AtlasStringKeyRow(
+            keys =
+                listOf(
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "5",
+                    "6",
+                    "7",
+                    "8",
+                    "9",
+                    "0"
+                ),
+
+            onKey = { value ->
+
+                onText(
+                    value
+                )
+            }
+        )
+
+        /*
+         * QWERTY ROW
+         */
+        AtlasLetterRow(
+            letters =
+                "qwertyuiop",
+
+            shiftActive =
+                shiftActive,
+
+            onLetter =
+                onLetter
+        )
+
+        /*
+         * HOME ROW
+         */
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        horizontal =
+                            12.dp
+                    ),
+
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    3.dp
+                )
+        ) {
+
+            "asdfghjkl"
+                .forEach { character ->
+
+                    AtlasTerminalKeyboardKey(
+                        modifier =
+                            Modifier
+                                .weight(
+                                    1f
+                                ),
+
+                        label =
+                            if (
+                                shiftActive
+                            ) {
+
+                                character
+                                    .uppercaseChar()
+                                    .toString()
+
+                            } else {
+
+                                character
+                                    .toString()
+                            },
+
+                        onClick = {
+
+                            onLetter(
+                                character
+                            )
+                        }
+                    )
+                }
+        }
+
+        /*
+         * SHIFT / BOTTOM LETTER ROW
+         */
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
+
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    3.dp
+                )
+        ) {
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            1.5f
+                        ),
+
+                label =
+                    if (
+                        shiftActive
+                    ) {
+
+                        "SHIFT*"
+
+                    } else {
+
+                        "SHIFT"
+                    },
+
+                highlighted =
+                    shiftActive,
+
+                onClick =
+                    onShift
+            )
+
+            "zxcvbnm"
+                .forEach { character ->
+
+                    AtlasTerminalKeyboardKey(
+                        modifier =
+                            Modifier
+                                .weight(
+                                    1f
+                                ),
+
+                        label =
+                            if (
+                                shiftActive
+                            ) {
+
+                                character
+                                    .uppercaseChar()
+                                    .toString()
+
+                            } else {
+
+                                character
+                                    .toString()
+                            },
+
+                        onClick = {
+
+                            onLetter(
+                                character
+                            )
+                        }
+                    )
+                }
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            1.5f
+                        ),
+
+                label =
+                    "BKSP",
+
+                onClick =
+                    onBackspace
+            )
+        }
+
+        /*
+         * TERMINAL CONTROL ROW
+         */
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
+
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    3.dp
+                )
+        ) {
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            1.2f
+                        ),
+
+                label =
+                    "SYM",
+
+                onClick =
+                    onSymbolMode
+            )
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            4f
+                        ),
+
+                label =
+                    "SPACE",
+
+                onClick = {
+
+                    onText(
+                        " "
+                    )
+                }
+            )
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            1.4f
+                        ),
+
+                label =
+                    "ENT",
+
+                onClick =
+                    onEnter
+            )
+        }
+    }
+}
+
+@Composable
+private fun AtlasSymbolKeyboard(
+    onText: (String) -> Unit,
+    onBackspace: () -> Unit,
+    onEnter: () -> Unit,
+    onAlphabetMode: () -> Unit
+) {
+
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(
+                    horizontal =
+                        3.dp,
+
+                    vertical =
+                        3.dp
+                ),
+
+        verticalArrangement =
+            Arrangement.spacedBy(
+                3.dp
+            )
+    ) {
+
+        /*
+         * COMMON SHELL SYMBOLS
+         */
+        AtlasStringKeyRow(
+            keys =
+                listOf(
+                    "!",
+                    "@",
+                    "#",
+                    "$",
+                    "%",
+                    "^",
+                    "&",
+                    "*",
+                    "(",
+                    ")"
+                ),
+
+            onKey =
+                onText
+        )
+
+        /*
+         * OPERATORS / BRACKETS
+         */
+        AtlasStringKeyRow(
+            keys =
+                listOf(
+                    "-",
+                    "_",
+                    "=",
+                    "+",
+                    "[",
+                    "]",
+                    "{",
+                    "}"
+                ),
+
+            onKey =
+                onText
+        )
+
+        /*
+         * PATH / SHELL SYMBOLS
+         */
+        AtlasStringKeyRow(
+            keys =
+                listOf(
+                    "/",
+                    "\\",
+                    "|",
+                    "~",
+                    "`",
+                    "'",
+                    "\""
+                ),
+
+            onKey =
+                onText
+        )
+
+        /*
+         * PUNCTUATION
+         */
+        AtlasStringKeyRow(
+            keys =
+                listOf(
+                    ";",
+                    ":",
+                    ",",
+                    ".",
+                    "<",
+                    ">",
+                    "?"
+                ),
+
+            onKey =
+                onText
+        )
+
+        /*
+         * RETURN TO LETTERS / EDITING
+         */
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
+
+            horizontalArrangement =
+                Arrangement.spacedBy(
+                    3.dp
+                )
+        ) {
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            1.3f
+                        ),
+
+                label =
+                    "ABC",
+
+                onClick =
+                    onAlphabetMode
+            )
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            3.5f
+                        ),
+
+                label =
+                    "SPACE",
+
+                onClick = {
+
+                    onText(
+                        " "
+                    )
+                }
+            )
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            1.4f
+                        ),
+
+                label =
+                    "BKSP",
+
+                onClick =
+                    onBackspace
+            )
+
+            AtlasTerminalKeyboardKey(
+                modifier =
+                    Modifier
+                        .weight(
+                            1.2f
+                        ),
+
+                label =
+                    "ENT",
+
+                onClick =
+                    onEnter
+            )
+        }
+    }
+}
+
+@Composable
+private fun AtlasLetterRow(
+    letters: String,
+    shiftActive: Boolean,
+    onLetter: (Char) -> Unit
 ) {
 
     Row(
@@ -353,7 +638,7 @@ private fun AtlasKeyboardCharacterRow(
             )
     ) {
 
-        characters
+        letters
             .forEach { character ->
 
                 AtlasTerminalKeyboardKey(
@@ -365,8 +650,7 @@ private fun AtlasKeyboardCharacterRow(
 
                     label =
                         if (
-                            shiftActive &&
-                            character.isLetter()
+                            shiftActive
                         ) {
 
                             character
@@ -381,8 +665,49 @@ private fun AtlasKeyboardCharacterRow(
 
                     onClick = {
 
-                        onCharacter(
+                        onLetter(
                             character
+                        )
+                    }
+                )
+            }
+    }
+}
+
+@Composable
+private fun AtlasStringKeyRow(
+    keys: List<String>,
+    onKey: (String) -> Unit
+) {
+
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth(),
+
+        horizontalArrangement =
+            Arrangement.spacedBy(
+                3.dp
+            )
+    ) {
+
+        keys
+            .forEach { key ->
+
+                AtlasTerminalKeyboardKey(
+                    modifier =
+                        Modifier
+                            .weight(
+                                1f
+                            ),
+
+                    label =
+                        key,
+
+                    onClick = {
+
+                        onKey(
+                            key
                         )
                     }
                 )
@@ -394,6 +719,7 @@ private fun AtlasKeyboardCharacterRow(
 private fun AtlasTerminalKeyboardKey(
     modifier: Modifier = Modifier,
     label: String,
+    highlighted: Boolean = false,
     onClick: () -> Unit
 ) {
 
@@ -409,13 +735,22 @@ private fun AtlasTerminalKeyboardKey(
 
         shape =
             RoundedCornerShape(
-                10.dp
+                6.dp
             ),
 
         border =
             BorderStroke(
                 width =
-                    1.dp,
+                    if (
+                        highlighted
+                    ) {
+
+                        2.dp
+
+                    } else {
+
+                        1.dp
+                    },
 
                 color =
                     AtlasKeyboardGreen
