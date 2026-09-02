@@ -1,14 +1,10 @@
-<div align="center">
-
 # Atlas Cyberdeck — Development Roadmap
 
 ### **Your Cyberdeck. Anywhere.**
 
 **Current release:** `v0.13.0-alpha`  
 **Current public phase:** Product Readiness + Kickstarter Pre-Launch  
-**Engineering source-of-truth endpoint:** `F3P-H5B`
-
-</div>
+**Engineering source-of-truth endpoint:** `F3P-H7B`
 
 ---
 
@@ -47,37 +43,39 @@ flowchart LR
 
 ## Status Legend
 
-| Status | Meaning |
-|---|---|
-| ✅ **LOCKED** | Implemented, validated, and accepted |
-| 🟢 **ACTIVE** | Current engineering work |
-| 🟡 **PLANNED** | Defined future work |
-| 🔵 **EXPLORATORY** | Long-term research or product direction |
-| ⏸️ **DEFERRED** | Intentionally postponed |
+| Status            | Meaning                                          |
+|-------------------|--------------------------------------------------|
+| ✅ **LOCKED**      | Implemented, validated, and accepted             |
+| 🟢 **ACTIVE**      | Current engineering work                         |
+| 🟡 **PLANNED**     | Defined future work                              |
+| 🔵 **EXPLORATORY** | Long-term research or product direction          |
+| ⏸️ **DEFERRED**    | Intentionally postponed                          |
 
 ---
 
 # Current Position
 
-| Product Area | Status |
-|---|:---:|
-| Android Application Foundation | ✅ |
-| Atlas Terminal | ✅ |
-| Persistent Virtual Filesystem | ✅ |
-| Command Architecture | ✅ |
-| Plugin Foundation | ✅ |
-| Ubuntu ARM64 Runtime | ✅ |
-| Persistent Linux Shell | ✅ |
-| Package Management | ✅ |
-| Runtime Safety | ✅ |
-| Regression Hardening | ✅ |
-| Documentation & Product Readiness | 🟢 |
-| Pre-Launch & Kickstarter Preparation | 🟢 |
-| Atlas Cyberdeck 1.0 | 🟡 |
+| Product Area                           | Status |
+|----------------------------------------|:------:|
+| Android Application Foundation         |   ✅   |
+| Atlas Terminal                         |   ✅   |
+| Interactive PTY Terminal               |   ✅   |
+| Persistent Virtual Filesystem          |   ✅   |
+| Command Architecture                   |   ✅   |
+| Plugin Foundation                      |   ✅   |
+| Ubuntu ARM64 Runtime                   |   ✅   |
+| Persistent Linux Shell                 |   ✅   |
+| Package Management                     |   ✅   |
+| Runtime Safety                         |   ✅   |
+| Regression Hardening                   |   ✅   |
+| Settings / About Experience            |   ✅   |
+| Documentation & Product Readiness      |   🟢   |
+| Pre-Launch & Kickstarter Preparation   |   🟢   |
+| Atlas Cyberdeck 1.0                    |   🟡   |
 
 Atlas is currently in the **v0.13.0-alpha** development line.
 
-The Linux runtime program has progressed from device capability detection to a functioning Ubuntu ARM64 environment with PRoot execution, package management, networking, persistent shell access, runtime safety, controlled recovery, and regression protection.
+The Linux runtime program has progressed from device capability detection to a functioning Ubuntu ARM64 environment with PRoot execution, package management, networking, persistent shell access, runtime safety, controlled recovery, interactive PTY applications, persistent terminal sessions, live PTY resize, and regression protection.
 
 ---
 
@@ -101,6 +99,8 @@ This phase established Atlas Cyberdeck as a stable native Android application.
 - Linux Manager
 - files screen
 - settings
+- About / credits / licenses experience
+- Atlas Labs emblem and product identity
 - ViewModel-driven state
 - StateFlow integration
 - cyberdeck-inspired visual identity
@@ -180,6 +180,8 @@ This phase moved Atlas from a Linux-manager concept to a functioning rootless Ub
 - guest handshake
 - real command execution bridge
 - persistent Ubuntu shell
+- interactive PTY execution for full-screen terminal applications
+- persistent process-level interactive session ownership
 - runtime diagnostics
 - runtime provenance checks
 - rootless Android execution
@@ -258,11 +260,11 @@ Atlas treats Linux runtime integrity as a first-class system concern.
 
 ### Safety states
 
-| State | Runtime Access | Purpose |
-|---|---|---|
-| 🟢 **NORMAL** | Enabled | Standard Linux operation |
-| 🟡 **SAFE_MODE** | Blocked | Fail closed after a serious runtime, filesystem, package, or integrity failure |
-| 🟠 **RECOVERY_ARMED** | Recovery only | Permit controlled repair while restricting guest commands |
+| State                 | Runtime Access | Purpose                                                                            |
+|-----------------------|----------------|------------------------------------------------------------------------------------|
+| 🟢 **NORMAL**          | Enabled        | Standard Linux operation                                                           |
+| 🟡 **SAFE_MODE**       | Blocked        | Fail closed after a serious runtime, filesystem, package, or integrity failure     |
+| 🟠 **RECOVERY_ARMED**  | Recovery only  | Permit controlled repair while restricting guest commands                          |
 
 ### Delivered
 
@@ -298,9 +300,9 @@ safety reset --force
 
 ## Phase 6 — Regression Hardening
 
-**Status:** ✅ LOCKED THROUGH `H5B`
+**Status:** ✅ LOCKED
 
-This phase protects critical runtime behavior from accidental regression.
+This phase protects critical runtime behavior from accidental regression and validates the interactive terminal experience on real hardware.
 
 ### Delivered
 
@@ -312,6 +314,19 @@ This phase protects critical runtime behavior from accidental regression.
 - recovery behavior validation
 - runtime access validation
 - pure safety state-machine tests
+- interactive PTY capability through `/dev/pts`
+- full-screen Nano and Vim rendering
+- persistent process-level interactive sessions
+- session survival across Atlas navigation and Android Home
+- live PTY resize with guest / renderer geometry synchronization
+- Atlas-native terminal keyboard
+- one-shot Ctrl combinations and dedicated control shortcuts
+- `SYM` / `ABC` punctuation layer
+- interactive-session lifecycle monitoring
+- natural PTY exit back to the Ubuntu shell
+- Ubuntu runtime stop / start regression validation
+- app-wide Dashboard / Linux / Terminal / Files / Settings smoke test
+- automated unit-test and debug-build gate
 
 ### Direct JVM safety coverage
 
@@ -326,9 +341,20 @@ reset          → NORMAL
 corrupt state  → fail closed
 ```
 
+### Device-validated terminal coverage
+
+```text
+Nano           → input / save / exit / persistence
+Vim            → insert / ESC / :wq / persistence
+PTY lifecycle  → navigation / Home / natural exit
+PTY resize     → live geometry synchronization
+Atlas keyboard → letters / numbers / Shift / Ctrl / symbols
+Ubuntu runtime → stop / start / shell re-entry
+```
+
 ### Result
 
-Critical safety policy can be tested independently of Android, PRoot, persistence, and filesystem side effects.
+Critical safety policy remains independently testable, while the interactive Linux terminal path has also survived full real-device regression testing.
 
 ---
 
@@ -339,6 +365,16 @@ Critical safety policy can be tested independently of Android, PRoot, persistenc
 The codebase advanced faster than the public-facing documentation during the Linux runtime program.
 
 This phase brings the repository, engineering documentation, visual identity, and product story back into alignment.
+
+### Recently completed
+
+- Settings About experience
+- Atlas Labs emblem integration
+- Credits and licenses access
+- approachable product copy
+- settings-only Atlas cat personality detail
+- interactive PTY terminal device validation
+- native terminal keyboard validation
 
 ### In progress
 
@@ -662,7 +698,7 @@ The detailed internal engineering track remains preserved below for developers, 
 
 ## F3P — Real Linux Execution
 
-**Status:** ✅ LOCKED THROUGH H5B
+**Status:** ✅ LOCKED THROUGH H7B
 
 - F3P-A — launch specification
 - F3P-B — real PRoot backend
@@ -715,12 +751,31 @@ The detailed internal engineering track remains preserved below for developers, 
 
 ## H5 — Regression Hardening
 
-**Status:** ✅ LOCKED THROUGH H5B
+**Status:** ✅ LOCKED
 
 - H5A — Linux command contract tests
 - H5B — safety state unit-testability
 
-**Current engineering endpoint:** `F3P-H5B`
+## H6 — Interactive PTY Terminal
+
+**Status:** ✅ LOCKED
+
+- H6A — PTY capability and termlib rendering
+- H6B — Nano / Vim full-screen application support
+- H6C — process-level persistent interactive session controller
+- H6D — live PTY resize and geometry synchronization
+- H6E — Atlas-native terminal keyboard
+- H6F — Ctrl combinations, control shortcuts, and symbol layer
+- H6G — lifecycle monitor and natural PTY exit handling
+
+## H7 — Device Regression & Product UX
+
+**Status:** ✅ LOCKED THROUGH H7B
+
+- H7A — full terminal / runtime device regression
+- H7B — Settings About / Credits / Licenses experience
+
+**Current engineering endpoint:** `F3P-H7B`
 
 </details>
 
@@ -740,15 +795,21 @@ flowchart TD
     D --> G["Atlas Shell"]
     D --> H["Virtual Filesystem"]
     D --> I["Linux Shell Mode"]
+    D --> N["Interactive PTY Terminal"]
 
     E --> J["PRoot Backend"]
     I --> K["Guest Command Executor"]
     K --> J
 
+    N --> O["Persistent PTY Session Controller"]
+    O --> P["termlib Renderer + /dev/pts"]
+    O --> J
+
     J --> L["Ubuntu 24.04.4 ARM64 RootFS"]
 
     F --> E
     F --> K
+    F --> O
     F --> C
 
     L --> M["apt / dpkg / Python / Linux Tools"]
@@ -771,6 +832,8 @@ The current design direction preserves:
 - the primary Ubuntu installation.
 
 Any future Burner implementation should operate only on explicitly disposable Burner-owned data.
+
+Current design direction may use a **SecureVaultAuthManager-inspired authentication gate** before a disposable Burner workspace is created. This remains conceptual and is not part of the current v1.0 critical path.
 
 It should not claim to erase Android, network-provider, cloud-provider, or external-system records.
 
@@ -806,20 +869,12 @@ Architecture, roadmap, security behavior, recovery behavior, and user-facing cap
 
 ---
 
-<div align="center">
-
 ## Atlas Labs
 
 ### **Build the platform. Prove the runtime. Earn the trust.**
 
-<br>
-
 > *"Maybe not breaking free from the Matrix—but we are writing our own code instead of living inside someone else's. That is a pretty good way to spend our time."*
-
-<br>
 
 **Atlas Cyberdeck — v0.13.0-alpha**
 
 ### **Your Cyberdeck. Anywhere.**
-
-</div>
