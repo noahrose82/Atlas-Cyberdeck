@@ -39,7 +39,7 @@ Atlas is being built for developers, cybersecurity students and professionals, s
 
 Atlas Cyberdeck is currently in active alpha development.
 
-The project already runs a persistent Ubuntu ARM64 userspace on Android through PRoot without requiring device root access. Core runtime control, package management, diagnostics, Safe Mode, controlled recovery, and the Atlas terminal are operational and under active testing.
+The project already runs a persistent Ubuntu ARM64 userspace on Android through PRoot without requiring device root access. Core runtime control, package management, diagnostics, Safe Mode, controlled recovery, the Atlas terminal, and interactive PTY applications are operational and have survived physical-device regression testing.
 
 Atlas Cyberdeck is currently under Kickstarter review. Crowdfunding, if approved and successfully funded, will support continued development toward a polished public release, expanded platform capabilities, broader device validation, documentation, and the path toward Atlas Cyberdeck 1.0.
 
@@ -56,8 +56,10 @@ Atlas Cyberdeck is currently under Kickstarter review. Crowdfunding, if approved
 | ARM64 / AArch64 | Persistent virtual filesystem | Safe Mode |
 | Rootless PRoot runtime | `.ash` scripting | Controlled Recovery |
 | Persistent root filesystem | Pipelines, aliases, history | Recovery command policy |
-| `apt`, `apt-get`, `dpkg` | Diagnostics and status | Package-state protection |
-| Android root not required | Plugin framework foundation | App-wide safety identity |
+| Interactive PTY applications | Atlas-native PTY keyboard | Package-state protection |
+| Nano and Vim | Diagnostics and status | App-wide safety identity |
+| `apt`, `apt-get`, `dpkg` | Plugin framework foundation | Verified recovery policy |
+| Android root not required | Settings / About experience | User-data preservation |
 
 ---
 
@@ -116,6 +118,34 @@ linux shell
 
 ---
 
+## Interactive Linux Applications
+
+Atlas now supports full-screen interactive terminal applications through a real PTY path rather than treating every Linux command as finite command output.
+
+### Device-validated applications
+
+```text
+nano
+vim
+```
+
+Current interactive-terminal behavior includes:
+
+- full-screen Nano and Vim rendering;
+- Android PTY access through `/dev/pts`;
+- persistent interactive sessions across Atlas navigation;
+- session survival when Atlas is backgrounded and reopened;
+- live PTY resize with guest and renderer geometry synchronization;
+- an Atlas-native on-screen terminal keyboard;
+- one-shot Ctrl combinations;
+- dedicated Ctrl+C, Ctrl+O, and Ctrl+X shortcuts;
+- an `SYM` / `ABC` punctuation layer;
+- natural return to the Ubuntu shell when the interactive application exits.
+
+The native Atlas keyboard is used for interactive PTY applications. The normal Atlas and Ubuntu shell command-entry paths retain their existing input behavior.
+
+---
+
 ## Runtime Stack
 
 ```mermaid
@@ -126,17 +156,28 @@ flowchart TD
     B --> E["Runtime Safety"]
 
     C --> F["Atlas Shell + Virtual Filesystem"]
+    C --> M["Ubuntu Shell Mode"]
+    C --> N["Interactive PTY Terminal"]
+
     D --> G["PRoot Backend"]
+    M --> O["Guest Command Executor"]
+    O --> G
+
+    N --> P["Persistent PTY Session Controller"]
+    P --> Q["termlib Renderer + /dev/pts"]
+    P --> G
+
     G --> H["Ubuntu 24.04.4 ARM64 RootFS"]
 
     E --> I["NORMAL"]
     E --> J["SAFE_MODE"]
     E --> K["RECOVERY_ARMED"]
+    E --> P
 
     H --> L["apt / dpkg / Python / Linux Tools"]
 ```
 
-The Atlas environment and Ubuntu environment are intentionally separate. Atlas owns application-level state, runtime control, diagnostics, and safety; Ubuntu provides the Linux userspace.
+The Atlas environment and Ubuntu environment are intentionally separate. Atlas owns application-level state, runtime control, diagnostics, safety, and interactive-session orchestration; Ubuntu provides the Linux userspace.
 
 ---
 
@@ -213,7 +254,11 @@ The Atlas terminal is its own shell environment and remains available independen
 - modular command handlers;
 - Atlas `.ash` scripts;
 - plugin discovery;
-- system and runtime diagnostics.
+- system and runtime diagnostics;
+- interactive PTY application routing;
+- persistent Nano and Vim sessions;
+- live PTY resize;
+- Atlas-native PTY keyboard with Ctrl and symbol layers.
 
 <details>
 <summary><strong>Show common Atlas commands</strong></summary>
@@ -409,7 +454,7 @@ Safety identity takes precedence over normal shell identity so the user can imme
 
 # Architecture
 
-Atlas Cyberdeck is organized around clear boundaries between the Android application, Atlas shell, Linux runtime, and runtime-safety systems.
+Atlas Cyberdeck is organized around clear boundaries between the Android application, Atlas shell, Linux runtime, interactive PTY stack, and runtime-safety systems.
 
 ```mermaid
 flowchart LR
@@ -421,15 +466,21 @@ flowchart LR
     AT --> CD["Command Dispatcher"]
     AT --> VFS["Virtual Filesystem"]
     AT --> LS["Linux Shell Mode"]
+    AT --> PTY["Interactive PTY Terminal"]
 
     LM --> RC["Runtime Controller"]
     LS --> GE["Guest Command Executor"]
+    PTY --> PSC["Persistent PTY Session Controller"]
+    PSC --> TR["termlib + /dev/pts"]
+
     RC --> PB["PRoot Backend"]
     GE --> PB
+    PSC --> PB
     PB --> UB["Ubuntu ARM64 RootFS"]
 
     SAFE["Runtime Safety"] --> RC
     SAFE --> GE
+    SAFE --> PSC
     SAFE --> UI
 ```
 
@@ -461,6 +512,10 @@ Atlas Cyberdeck
 │   ├── Ubuntu ARM64 RootFS
 │   ├── Guest Command Executor
 │   ├── Persistent Shell Mode
+│   ├── Interactive PTY Session Controller
+│   ├── termlib Renderer
+│   ├── Live PTY Resize
+│   ├── Atlas Native Terminal Keyboard
 │   ├── Package Command Policy
 │   ├── DNS Synchronization
 │   └── Runtime Diagnostics
@@ -501,8 +556,16 @@ For deeper engineering documentation, see [`docs/ARCHITECTURE.md`](docs/ARCHITEC
 | Controlled Recovery | ✅ |
 | Safety diagnostics | ✅ |
 | Safety-aware UI | ✅ |
+| Interactive PTY applications | ✅ |
+| Nano / Vim | ✅ |
+| Persistent PTY sessions | ✅ |
+| Live PTY resize | ✅ |
+| Atlas-native PTY keyboard | ✅ |
+| Ctrl combinations and symbol layer | ✅ |
+| Settings / About experience | ✅ |
 | Linux command regression tests | ✅ |
 | Safety state-machine unit tests | ✅ |
+| Full device smoke test | ✅ |
 
 > Atlas Cyberdeck is **alpha software**. Interfaces, implementation details, and runtime behavior may continue to change before 1.0.
 
@@ -530,7 +593,7 @@ Atlas uses automated tests plus physical-device validation for runtime-critical 
 ./gradlew installDebug
 ```
 
-Current regression coverage includes Linux command contracts, package policy, runtime access rules, recovery behavior, and pure safety-state transitions.
+Current regression coverage includes Linux command contracts, package policy, runtime access rules, recovery behavior, pure safety-state transitions, interactive PTY lifecycle, Nano and Vim workflows, live PTY resize, Atlas-native keyboard input, runtime stop / start, and app-wide physical-device smoke testing.
 
 ---
 
@@ -541,9 +604,10 @@ Current regression coverage includes Linux command contracts, package policy, ru
 | Kotlin | PRoot | Gradle |
 | Jetpack Compose | Ubuntu ARM64 | JUnit |
 | Material 3 | Debian package tools | Git |
-| ViewModel | Native ARM64 libraries | GitHub |
-| StateFlow | Android DNS integration | GitLab |
-| Coroutines | Persistent RootFS | GitHub Actions |
+| ViewModel | ConnectBot termlib | GitHub |
+| StateFlow | Native ARM64 libraries | GitLab |
+| Coroutines | Android DNS integration | GitHub Actions |
+| Material UI | Persistent RootFS | Physical-device regression |
 
 The Android namespace currently remains:
 
