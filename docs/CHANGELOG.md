@@ -28,7 +28,7 @@ The project roadmap contains the detailed phase history:
 
 `v0.13.0-alpha` represents the largest technical expansion of Atlas Cyberdeck so far.
 
-This release line moves Atlas beyond a Linux-inspired terminal foundation and establishes a **real rootless Ubuntu ARM64 environment on Android**, together with persistent shell access, package management, Android network integration, runtime diagnostics, fail-closed safety controls, controlled recovery, and regression protection.
+This release line moves Atlas beyond a Linux-inspired terminal foundation and establishes a **real rootless Ubuntu ARM64 environment on Android**, together with persistent shell access, package management, Android network integration, runtime diagnostics, fail-closed safety controls, controlled recovery, interactive PTY applications, an Atlas-native terminal keyboard, and expanded regression protection.
 
 ### Release Highlights
 
@@ -47,8 +47,16 @@ This release line moves Atlas beyond a Linux-inspired terminal foundation and es
 | Safe Mode | ✅ |
 | Controlled Recovery | ✅ |
 | Safety-aware UI | ✅ |
+| Interactive PTY terminal | ✅ |
+| Nano / Vim | ✅ |
+| Persistent PTY sessions | ✅ |
+| Live PTY resize | ✅ |
+| Atlas-native PTY keyboard | ✅ |
+| Ctrl combinations / SYM layer | ✅ |
+| Settings / About experience | ✅ |
 | Linux command regression tests | ✅ |
 | Safety state-machine tests | ✅ |
+| Full device regression smoke test | ✅ |
 
 ---
 
@@ -245,9 +253,84 @@ Coroutine-based execution prevents Linux commands from unnecessarily blocking Co
 
 ### Interactive Command Guard
 
-Added protection against commands requiring terminal behavior Atlas does not yet fully provide.
+Added protection for commands that require true terminal behavior.
 
-Commands that require a true PTY can be blocked or handled explicitly instead of being presented as fully supported interactive applications.
+The guard remains a safety net for interactive commands that Atlas does not explicitly support. Commands with a validated PTY path are routed into the interactive terminal stack instead of being treated as finite guest commands.
+
+---
+
+### Interactive PTY Terminal
+
+Added a real interactive PTY path for full-screen Linux applications.
+
+The current interactive stack includes:
+
+- PTY allocation through `/dev/pts`;
+- ConnectBot termlib rendering;
+- process-level persistent session ownership;
+- full-screen Nano and Vim support;
+- interactive input independent of the finite guest-command executor;
+- natural return to the Ubuntu shell when the interactive application exits.
+
+---
+
+### Persistent Interactive Sessions
+
+Interactive PTY sessions are owned at the application-process level rather than by a screen-scoped ViewModel.
+
+Validated behavior includes:
+
+- surviving Terminal → Dashboard → Terminal navigation;
+- surviving Android Home / app return;
+- preserving unsaved Nano buffers across UI recreation;
+- restoring the active terminal emulator when the UI reattaches.
+
+---
+
+### Live PTY Resize
+
+Added live terminal geometry synchronization.
+
+Atlas now measures the actual interactive terminal viewport and propagates row / column changes through:
+
+```text
+TerminalScreen
+    ↓
+TerminalViewModel
+    ↓
+Interactive Session Controller
+    ↓
+Interactive Terminal Bridge
+    ↓
+Linux PTY / stty
+    ↓
+termlib renderer
+```
+
+This keeps the guest PTY and Android renderer on the same geometry contract.
+
+---
+
+### Atlas-Native Terminal Keyboard
+
+Added an Atlas-native on-screen keyboard for interactive PTY applications.
+
+Current capabilities include:
+
+- letters and numbers;
+- Shift;
+- Space;
+- Enter;
+- Backspace;
+- Ctrl;
+- Esc;
+- Tab;
+- arrow keys;
+- dedicated `Ctrl+C`, `Ctrl+O`, and `Ctrl+X` actions;
+- one-shot Ctrl combinations;
+- `SYM` / `ABC` punctuation layer.
+
+termlib remains configured to accept physical / Bluetooth keyboard input. This input path was not part of the current physical-device regression pass.
 
 ---
 
@@ -627,6 +710,28 @@ to report safety mode, access state, and safety reason when appropriate.
 
 ---
 
+## Product Experience
+
+### Settings / About
+
+Added a product-facing About experience to Settings.
+
+Current content includes:
+
+- Atlas Cyberdeck emblem;
+- product name and tagline;
+- approachable product description;
+- Atlas Labs attribution;
+- creator credit;
+- current version;
+- Credits access;
+- Licenses access;
+- a small Settings-only Atlas cat personality detail.
+
+The design intentionally keeps Atlas technically credible while making the product feel approachable to users who may not identify as Linux or cybersecurity experts.
+
+---
+
 ## Fixed
 
 ### `linux shell` Regression
@@ -678,6 +783,24 @@ Runtime session state and repository state are reconciled against actual process
 
 ---
 
+### Interactive Session Lifecycle Detection
+
+Hardened interactive-session lifecycle detection.
+
+A lightweight application-process lifecycle monitor now observes the interactive process and clears the active-session state when the PTY command naturally completes.
+
+Natural Nano and Vim exit paths were validated on-device after this change.
+
+---
+
+### Atlas Keyboard Ctrl Combinations
+
+Fixed Atlas-native keyboard Ctrl behavior so an armed Ctrl modifier followed by a letter sends the expected control character.
+
+Dedicated control actions continue to work independently.
+
+---
+
 ## Changed
 
 ### Runtime Ownership
@@ -691,7 +814,9 @@ Repository          → installation/runtime data model
 Controller          → runtime orchestration
 Backend             → runtime implementation
 Process Launcher    → native process creation
-Guest Executor      → Linux command execution
+Guest Executor      → finite Linux command execution
+PTY Controller       → persistent interactive terminal sessions
+PTY Bridge           → renderer / PTY input and resize coordination
 State Machine       → pure safety transitions
 Circuit Breaker     → safety persistence and side effects
 UI                  → authoritative-state rendering
@@ -714,6 +839,14 @@ and:
 ```text
 root@atlas:~#
 ```
+
+---
+
+### Interactive Terminal Routing
+
+Changed terminal command processing so validated interactive commands are routed into the PTY path before the normal finite guest-command path.
+
+The finite guest executor remains responsible for ordinary commands and package workflows; it is not used as an interactive shell transport.
 
 ---
 
@@ -826,6 +959,16 @@ Safe Mode
 Recovery Mode
 verified recovery
 runtime diagnostics
+Nano full-screen editing
+Vim insert / save / exit
+interactive session persistence
+live PTY resize
+Atlas-native keyboard input
+Ctrl combinations
+SYM / ABC punctuation layer
+natural PTY exit
+runtime stop / start regression
+app-wide screen smoke test
 ```
 
 ---
@@ -846,6 +989,11 @@ The public description now reflects:
 - Linux diagnostics
 - current testing strategy
 - current architecture
+- interactive PTY terminal support
+- Nano and Vim validation
+- Atlas-native PTY keyboard
+- live PTY resize
+- current device-regression coverage
 
 ---
 
@@ -856,10 +1004,12 @@ Rebuilt the roadmap around public product phases while retaining the complete in
 Internal milestones through:
 
 ```text
-F3P-H5B
+F3P-H7B
 ```
 
 remain documented for traceability.
+
+The roadmap now records the interactive PTY terminal work as H6 and current device-regression / product-UX work as H7.
 
 ---
 
@@ -912,7 +1062,7 @@ Runtime-critical phases are not considered complete based on compilation alone.
 The current Linux-runtime engineering track is complete through:
 
 ```text
-F3P-H5B
+F3P-H7B
 ```
 
 Detailed phase history is maintained in:
@@ -1009,7 +1159,7 @@ The v0.10.0-alpha line established the application architecture that later suppo
 
 Atlas Cyberdeck remains under active alpha development.
 
-The current focus is **documentation and product readiness** following the Linux runtime and safety hardening work completed through `F3P-H5B`.
+The current focus is **documentation and product readiness** following the Linux runtime, safety hardening, interactive PTY terminal, device-regression, and Settings / About work completed through `F3P-H7B`.
 
 Upcoming product work is tracked in:
 
