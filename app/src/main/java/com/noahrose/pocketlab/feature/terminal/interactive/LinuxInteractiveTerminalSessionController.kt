@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.connectbot.terminal.TerminalEmulator
+import kotlin.time.Duration.Companion.milliseconds
 
 object LinuxInteractiveTerminalSessionController {
 
@@ -81,7 +83,23 @@ object LinuxInteractiveTerminalSessionController {
             }
         )
 
+    /*
+     * Pumps PTY stdout/stderr into termlib.
+     */
     private var outputPumpJob:
+            Job? =
+        null
+
+    /*
+     * Independently watches the interactive process.
+     *
+     * This is intentionally separate from the output pump.
+     *
+     * PTY streams can remain open momentarily after an
+     * interactive application exits. Atlas must not require
+     * stream EOF before recognizing that nano/vim ended.
+     */
+    private var sessionMonitorJob:
             Job? =
         null
 
@@ -96,6 +114,18 @@ object LinuxInteractiveTerminalSessionController {
 
         _controlArmed.value =
             bridge.isControlArmed()
+
+        /*
+         * If the application-level controller is recreated
+         * while the underlying process still exists, restore
+         * lifecycle monitoring as well.
+         */
+        if (
+            bridge.isActive
+        ) {
+
+            startSessionMonitor()
+        }
     }
 
     /*
@@ -186,6 +216,12 @@ object LinuxInteractiveTerminalSessionController {
                         .isControlArmed()
 
                 startOutputPump()
+
+                /*
+                 * Lifecycle ownership must not depend on
+                 * stdout/stderr reaching EOF.
+                 */
+                startSessionMonitor()
             }
 
             is LinuxInteractiveSessionStartResult.Failure -> {
@@ -237,8 +273,7 @@ object LinuxInteractiveTerminalSessionController {
             !bridge.isActive
         ) {
 
-            _sessionActive.value =
-                false
+            markSessionFinished()
 
             return LinuxInteractiveResizeResult
                 .Failure(
@@ -258,8 +293,7 @@ object LinuxInteractiveTerminalSessionController {
                     !bridge.isActive
                 ) {
 
-                    _sessionActive.value =
-                        false
+                    markSessionFinished()
 
                     return@withLock LinuxInteractiveResizeResult
                         .Failure(
@@ -288,8 +322,17 @@ object LinuxInteractiveTerminalSessionController {
                  * if the interactive process exits during
                  * the resize attempt.
                  */
-                _sessionActive.value =
+                if (
                     bridge.isActive
+                ) {
+
+                    _sessionActive.value =
+                        true
+
+                } else {
+
+                    markSessionFinished()
+                }
 
                 result
             }
@@ -320,17 +363,136 @@ object LinuxInteractiveTerminalSessionController {
 
                     } finally {
 
-                        _sessionActive.value =
+                        /*
+                         * Stream completion is still useful
+                         * lifecycle evidence, but it is no
+                         * longer the only lifecycle signal.
+                         */
+                        if (
                             bridge.isActive
+                        ) {
 
-                        _controlArmed.value =
-                            bridge
-                                .isControlArmed()
+                            _sessionActive.value =
+                                true
+
+                            _controlArmed.value =
+                                bridge
+                                    .isControlArmed()
+
+                        } else {
+
+                            markSessionFinished(
+                                cancelOutputPump =
+                                    false
+                            )
+                        }
 
                         outputPumpJob =
                             null
                     }
                 }
+    }
+
+    /*
+     * ------------------------------------------------
+     * SESSION LIFECYCLE MONITOR
+     * ------------------------------------------------
+     *
+     * Nano, Vim and other full-screen PTY applications may
+     * close their process before every inherited stream has
+     * reached EOF.
+     *
+     * Waiting exclusively for pumpOutput() can therefore
+     * leave Atlas displaying an empty interactive terminal.
+     *
+     * The process is the authoritative lifecycle signal.
+     */
+    private fun startSessionMonitor() {
+
+        sessionMonitorJob
+            ?.cancel()
+
+        sessionMonitorJob =
+            controllerScope
+                .launch {
+
+                    try {
+
+                        while (
+                            true
+                        ) {
+
+                            val active =
+                                bridge.isActive
+
+                            if (
+                                !active
+                            ) {
+
+                                markSessionFinished()
+
+                                break
+                            }
+
+                            /*
+                             * Keep the StateFlow authoritative
+                             * even after UI recreation.
+                             */
+                            _sessionActive.value =
+                                true
+
+                            delay(
+                                100.milliseconds
+                            )
+                        }
+
+                    } finally {
+
+                        sessionMonitorJob =
+                            null
+                    }
+                }
+    }
+
+    /*
+     * ------------------------------------------------
+     * SESSION COMPLETION
+     * ------------------------------------------------
+     *
+     * Natural command completion is different from an
+     * explicit user-requested stop.
+     *
+     * Nano/Vim exiting should:
+     *
+     *     release Ctrl
+     *     mark the PTY inactive
+     *     return Compose to the normal Ubuntu terminal
+     *
+     * It must NOT stop the main Ubuntu runtime.
+     */
+    private fun markSessionFinished(
+        cancelOutputPump: Boolean =
+            true
+    ) {
+
+        bridge
+            .setControlArmed(
+                false
+            )
+
+        _controlArmed.value =
+            false
+
+        _sessionActive.value =
+            false
+
+        if (
+            cancelOutputPump
+        ) {
+
+            outputPumpJob
+                ?.cancel()
+        }
     }
 
     /*
@@ -341,6 +503,15 @@ object LinuxInteractiveTerminalSessionController {
     fun sendBytes(
         bytes: ByteArray
     ): Boolean {
+
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return false
+        }
 
         return bridge
             .sendBytes(
@@ -366,6 +537,15 @@ object LinuxInteractiveTerminalSessionController {
         armed: Boolean
     ) {
 
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return
+        }
+
         bridge
             .setControlArmed(
                 armed
@@ -374,6 +554,15 @@ object LinuxInteractiveTerminalSessionController {
 
     fun toggleControlArmed():
             Boolean {
+
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return false
+        }
 
         return bridge
             .toggleControlArmed()
@@ -387,34 +576,55 @@ object LinuxInteractiveTerminalSessionController {
     fun sendEscape():
             Boolean {
 
-        return bridge
-            .sendEscape()
+        return sendBytes(
+            byteArrayOf(
+                0x1B.toByte()
+            )
+        )
     }
 
     fun sendTab():
             Boolean {
 
-        return bridge
-            .sendTab()
+        return sendBytes(
+            byteArrayOf(
+                '\t'.code.toByte()
+            )
+        )
     }
 
     fun sendEnter():
             Boolean {
 
-        return bridge
-            .sendEnter()
+        return sendBytes(
+            byteArrayOf(
+                '\r'.code.toByte()
+            )
+        )
     }
 
     fun sendBackspace():
             Boolean {
 
-        return bridge
-            .sendBackspace()
+        return sendBytes(
+            byteArrayOf(
+                0x7F.toByte()
+            )
+        )
     }
 
     fun sendControl(
         character: Char
     ): Boolean {
+
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return false
+        }
 
         return bridge
             .sendControl(
@@ -425,12 +635,30 @@ object LinuxInteractiveTerminalSessionController {
     fun sendArrowUp():
             Boolean {
 
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return false
+        }
+
         return bridge
             .sendArrowUp()
     }
 
     fun sendArrowDown():
             Boolean {
+
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return false
+        }
 
         return bridge
             .sendArrowDown()
@@ -439,12 +667,30 @@ object LinuxInteractiveTerminalSessionController {
     fun sendArrowLeft():
             Boolean {
 
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return false
+        }
+
         return bridge
             .sendArrowLeft()
     }
 
     fun sendArrowRight():
             Boolean {
+
+        if (
+            !bridge.isActive
+        ) {
+
+            markSessionFinished()
+
+            return false
+        }
 
         return bridge
             .sendArrowRight()
@@ -461,17 +707,20 @@ object LinuxInteractiveTerminalSessionController {
         val active =
             bridge.isActive
 
-        _sessionActive.value =
-            active
-
         if (
-            !active
+            active
         ) {
 
-            bridge
-                .setControlArmed(
-                    false
-                )
+            _sessionActive.value =
+                true
+
+            _controlArmed.value =
+                bridge
+                    .isControlArmed()
+
+        } else {
+
+            markSessionFinished()
         }
 
         return active
@@ -494,21 +743,30 @@ object LinuxInteractiveTerminalSessionController {
             bridge
                 .stop()
 
-        _sessionActive.value =
+        val active =
             bridge.isActive
+
+        _sessionActive.value =
+            active
 
         _controlArmed.value =
             bridge
                 .isControlArmed()
 
         if (
-            stopped
+            !active
         ) {
 
             outputPumpJob
                 ?.cancel()
 
             outputPumpJob =
+                null
+
+            sessionMonitorJob
+                ?.cancel()
+
+            sessionMonitorJob =
                 null
         }
 
