@@ -23,6 +23,8 @@ This document describes the high-level software architecture of **Atlas Cyberdec
 - PRoot integration
 - Ubuntu RootFS
 - guest command execution
+- interactive PTY terminal architecture
+- terminal rendering and native PTY input
 - package-management safeguards
 - runtime safety
 - recovery behavior
@@ -61,9 +63,11 @@ flowchart TD
     VM --> TERM["Atlas Terminal"]
     VM --> LINUXUI["Linux Manager"]
     VM --> FILES["Files UI"]
+    VM --> SETTINGS["Settings / About"]
 
     TERM --> SHELL["Atlas Shell"]
     TERM --> LSM["Linux Shell Mode"]
+    TERM --> PTY["Interactive PTY Terminal"]
 
     SHELL --> VFS["Atlas Virtual Filesystem"]
     SHELL --> CMD["Command Architecture"]
@@ -71,14 +75,23 @@ flowchart TD
     LINUXUI --> CTRL["Linux Runtime Controller"]
     LSM --> EXEC["Guest Command Executor"]
 
+    PTY --> PTYCTRL["Persistent PTY Session Controller"]
+    PTYCTRL --> BRIDGE["Interactive Terminal Bridge"]
+    BRIDGE --> RENDER["termlib Renderer"]
+    BRIDGE --> PTYDEV["Linux PTY / /dev/pts"]
+
     CTRL --> BACKEND["Linux Runtime Backend"]
     EXEC --> BACKEND
 
+    PTYCTRL --> ISPEC["Interactive PRoot Process Spec"]
+    ISPEC --> IPROC["Interactive PRoot Process"]
+
     BACKEND --> PROOT["PRoot Process"]
-    PROOT --> ROOTFS["Ubuntu 24.04.4 ARM64 RootFS"]
+    IPROC --> ROOTFS
 
     SAFE["Runtime Safety"] --> CTRL
     SAFE --> EXEC
+    SAFE --> PTYCTRL
     SAFE --> UI
 
     ROOTFS --> TOOLS["apt / dpkg / Python / Linux Tools"]
@@ -102,7 +115,8 @@ Ubuntu Environment
     ├── Linux filesystem
     ├── apt / dpkg
     ├── Python
-    └── guest Linux commands
+    ├── finite guest Linux commands
+    └── interactive PTY applications
 ```
 
 These environments interact, but they are not the same system.
@@ -137,7 +151,9 @@ The Android layer owns:
 - runtime controls
 - safety-state presentation
 - app-wide status
+- interactive-terminal UI attachment
 - persistent application settings
+- product-facing About / credits / licenses presentation
 
 ---
 
@@ -163,7 +179,7 @@ Dashboard
 Terminal
 Linux Manager
 Files
-Settings
+Settings / About
 Boot Experience
 ```
 
@@ -380,7 +396,8 @@ The runtime system owns:
 - RootFS location
 - native runtime assets
 - ABI validation
-- guest command execution
+- finite guest command execution
+- interactive PTY process execution
 - process-health reconciliation
 
 ---
@@ -590,7 +607,7 @@ When Ubuntu shell mode is active:
 root@atlas:~#
 ```
 
-commands are sent to the Ubuntu guest.
+ordinary commands are sent to the Ubuntu guest through the finite guest-command path. Commands recognized as supported interactive applications are routed to the interactive PTY path.
 
 When the user runs:
 
@@ -610,7 +627,9 @@ without unnecessarily stopping the Linux runtime.
 
 # 19. Guest Command Executor
 
-The guest command executor bridges Atlas terminal input to the running Ubuntu environment.
+The guest command executor bridges **finite** Atlas terminal commands to the running Ubuntu environment.
+
+It is intentionally not the transport for full-screen interactive applications. Interactive PTY applications use the dedicated PTY subsystem described below.
 
 Responsibilities include:
 
@@ -669,30 +688,164 @@ UI Thread
 
 ---
 
-# 21. Interactive Command Guard
+# 21. Interactive PTY Terminal Architecture
 
-Atlas does not yet expose a general-purpose PTY.
+Atlas provides a dedicated PTY path for validated full-screen Linux applications.
 
-Commands that require full interactive terminal control must therefore be guarded instead of pretending to support them correctly.
+The PTY subsystem is separate from the finite guest-command executor so interactive applications can own a terminal session without weakening normal command timeout, package, recovery, or safety behavior.
 
-Examples may include:
+```mermaid
+flowchart TD
+    CMD["Ubuntu shell command"] --> GUARD["Interactive Command Guard"]
+    GUARD -->|Finite command| EXEC["Guest Command Executor"]
+    GUARD -->|Validated interactive command| CTRL["Interactive Session Controller"]
+
+    CTRL --> SPEC["Interactive PRoot Process Spec"]
+    SPEC --> PROC["Interactive PRoot Process"]
+    PROC --> PTY["Linux PTY / /dev/pts"]
+
+    CTRL --> BRIDGE["Interactive Terminal Bridge"]
+    BRIDGE --> RENDER["termlib Renderer"]
+    BRIDGE --> INPUT["Atlas Native PTY Keyboard"]
+
+    RESIZE["Measured Terminal Viewport"] --> VM["Terminal ViewModel"]
+    VM --> CTRL
+    CTRL --> BRIDGE
+    BRIDGE --> PTY
+    BRIDGE --> RENDER
+```
+
+## Current validated applications
 
 ```text
 nano
-vi
 vim
-top
 ```
 
-The architectural rule is:
+The interactive command guard remains in place for terminal-oriented commands Atlas has not explicitly validated.
 
-> Do not silently present non-PTY execution as a fully interactive terminal.
+### Architectural rule
 
-PTY support can be introduced later as its own engineering phase.
+> **Do not silently present non-PTY execution as a fully interactive terminal.**
+
+Supported interactive commands are routed into the PTY subsystem. Unsupported interactive commands remain guarded rather than being falsely represented as working.
 
 ---
 
-# 22. Android DNS Synchronization
+# 22. Persistent Interactive Session Ownership
+
+Interactive terminal sessions are owned at application-process scope rather than by a screen-scoped ViewModel.
+
+Conceptually:
+
+```text
+TerminalScreen
+    │ attach / detach
+    ▼
+TerminalViewModel
+    │
+    ▼
+LinuxInteractiveTerminalSessionController
+    │
+    ├── active interactive process
+    ├── terminal bridge
+    ├── emulator state
+    ├── input routing
+    ├── resize coordination
+    └── lifecycle monitor
+```
+
+This allows an active PTY application to survive ordinary UI recreation.
+
+Device-validated behavior includes:
+
+- Terminal → Dashboard → Terminal;
+- Android Home → return to Atlas;
+- preservation of unsaved Nano state;
+- Vim session persistence;
+- natural application exit back to Ubuntu shell mode.
+
+---
+
+# 23. Interactive Terminal Bridge
+
+The interactive terminal bridge coordinates bytes between the Linux PTY and the Android terminal renderer.
+
+Responsibilities include:
+
+- input delivery to the interactive process;
+- PTY output delivery to the terminal emulator;
+- PTY-active state;
+- terminal-emulator coordination;
+- live resize;
+- safe teardown.
+
+The bridge does not replace the Linux runtime controller or guest-command executor. It is a specialized transport for a running interactive PTY session.
+
+---
+
+# 24. Live PTY Resize
+
+Interactive terminal geometry is derived from the actual rendered terminal viewport.
+
+Resize flow:
+
+```text
+Terminal viewport measurement
+    ↓
+TerminalViewModel debounce
+    ↓
+Interactive Session Controller
+    ↓
+Interactive Terminal Bridge
+    ↓
+Linux PTY stty rows / cols
+    ↓
+termlib emulator resize
+```
+
+The guest PTY is resized before the renderer is committed to the new geometry. Resize behavior is fail-closed: Atlas does not knowingly leave the guest and renderer on contradictory geometry when the PTY resize fails.
+
+---
+
+# 25. Atlas Native PTY Keyboard
+
+Atlas provides an on-screen keyboard specifically for interactive PTY applications.
+
+Current capabilities include:
+
+- letters and numbers;
+- Shift;
+- Space;
+- Enter;
+- Backspace;
+- Ctrl;
+- Esc;
+- Tab;
+- arrow keys;
+- dedicated `Ctrl+C`, `Ctrl+O`, and `Ctrl+X` actions;
+- one-shot Ctrl combinations;
+- `SYM` / `ABC` punctuation layer.
+
+The native Android soft keyboard is suppressed while the Atlas PTY keyboard is active.
+
+termlib remains configured to accept physical / Bluetooth keyboard input, but that input path was not part of the current physical-device regression pass.
+
+---
+
+# 26. Interactive Session Lifecycle Monitoring
+
+Interactive session ownership includes a lightweight process-level lifecycle monitor.
+
+The monitor observes whether the interactive bridge remains active and clears application-level interactive-session state after the PTY command naturally completes.
+
+This prevents a completed interactive application from being represented indefinitely as an active PTY session.
+
+Natural Nano and Vim exit paths were validated on-device.
+
+---
+
+# 27. Android DNS Synchronization
 
 The Ubuntu guest uses Android's active DNS environment.
 
@@ -708,7 +861,7 @@ This avoids hard-coding public resolvers and allows the guest to follow the devi
 
 ---
 
-# 23. Package Management Architecture
+# 28. Package Management Architecture
 
 Ubuntu package management uses standard Debian tools:
 
@@ -741,7 +894,7 @@ flowchart TD
 
 ---
 
-# 24. Runtime Safety Architecture
+# 29. Runtime Safety Architecture
 
 Atlas includes a fail-closed safety subsystem around the Linux runtime.
 
@@ -765,7 +918,7 @@ RECOVERY_ARMED
 
 ---
 
-# 25. Safety State Machine
+# 30. Safety State Machine
 
 Pure safety transition rules are separated from side effects.
 
@@ -795,7 +948,7 @@ This allows critical safety policy to be tested as ordinary JVM logic.
 
 ---
 
-# 26. Runtime Circuit Breaker
+# 31. Runtime Circuit Breaker
 
 The circuit breaker owns safety side effects and persistence.
 
@@ -821,7 +974,7 @@ flowchart TD
 
 ---
 
-# 27. Fail-Closed Behavior
+# 32. Fail-Closed Behavior
 
 If Atlas cannot reliably determine whether the runtime is safe, the architecture prefers blocking runtime access over assuming everything is normal.
 
@@ -839,7 +992,7 @@ Examples include:
 
 ---
 
-# 28. Recovery Architecture
+# 33. Recovery Architecture
 
 Recovery is intentionally narrower than normal runtime operation.
 
@@ -866,7 +1019,7 @@ During recovery:
 
 ---
 
-# 29. Recovery Policy
+# 34. Recovery Policy
 
 The recovery policy separates:
 
@@ -896,7 +1049,7 @@ may help inspect package state, but is not itself sufficient to prove that a fai
 
 ---
 
-# 30. Reactive Safety State
+# 35. Reactive Safety State
 
 Runtime safety is observable.
 
@@ -917,7 +1070,7 @@ This prevents safety presentation from depending on manual UI refresh logic.
 
 ---
 
-# 31. Safety-Aware UI
+# 36. Safety-Aware UI
 
 Safety state is surfaced across the application.
 
@@ -934,7 +1087,7 @@ The UI must not make a blocked runtime appear available.
 
 ---
 
-# 32. Diagnostics Architecture
+# 37. Diagnostics Architecture
 
 Atlas diagnostics consolidate information from multiple subsystems.
 
@@ -971,7 +1124,7 @@ Diagnostics should reflect authoritative runtime state rather than reconstructin
 
 ---
 
-# 33. Runtime Data Ownership
+# 38. Runtime Data Ownership
 
 Atlas distinguishes between persistent and transient runtime data.
 
@@ -1005,7 +1158,7 @@ Recovery cleanup should target **transient state only** unless the user explicit
 
 ---
 
-# 34. Process State vs Repository State
+# 39. Process State vs Repository State
 
 A central design lesson in Atlas is that:
 
@@ -1024,7 +1177,7 @@ instead of treating any one signal as sufficient.
 
 ---
 
-# 35. SOLID Principles
+# 40. SOLID Principles
 
 Atlas is not structured around SOLID terminology for appearance alone; the principles are used where they improve maintainability.
 
@@ -1035,7 +1188,9 @@ Examples:
 ```text
 Runtime Controller      → runtime orchestration
 Runtime Backend         → runtime implementation
-Guest Executor          → guest command execution
+Guest Executor          → finite guest command execution
+PTY Session Controller  → persistent interactive session ownership
+PTY Bridge              → PTY / renderer coordination
 Safety State Machine    → pure safety transitions
 Circuit Breaker         → persistence + safety side effects
 Repository              → installation/runtime data model
@@ -1060,7 +1215,7 @@ Higher-level runtime control depends on backend abstractions rather than directl
 
 ---
 
-# 36. Testing Strategy
+# 41. Testing Strategy
 
 Atlas uses multiple levels of validation.
 
@@ -1105,11 +1260,17 @@ Required for behaviors involving:
 - package installation
 - networking
 - process lifecycle
+- PTY allocation and `/dev/pts`
+- Nano and Vim workflows
+- interactive-session persistence
+- live PTY resize
+- Atlas-native PTY keyboard input
+- natural interactive-session exit
 - Compose/runtime integration
 
 ---
 
-# 37. Build Validation
+# 42. Build Validation
 
 Standard local validation:
 
@@ -1128,7 +1289,7 @@ A successful compilation alone is not considered sufficient validation for runti
 
 ---
 
-# 38. Continuous Integration
+# 43. Continuous Integration
 
 Atlas uses Git-based source control and automated CI validation.
 
@@ -1158,7 +1319,7 @@ CI is intended to catch regressions that can be detected in a deterministic buil
 
 ---
 
-# 39. Source Control Strategy
+# 44. Source Control Strategy
 
 Atlas is maintained with Git and mirrored across:
 
@@ -1173,7 +1334,7 @@ The repository should remain buildable at locked checkpoints.
 
 ---
 
-# 40. Package Organization
+# 45. Package Organization
 
 The current Android namespace remains:
 
@@ -1192,6 +1353,8 @@ com.noahrose.pocketlab
 │   ├── linux
 │   │   └── runtime
 │   │       ├── command
+│   │       ├── process
+│   │       ├── platform
 │   │       └── safety
 │   ├── system
 │   └── terminal
@@ -1202,7 +1365,7 @@ The legacy namespace is intentionally preserved until a dedicated package-migrat
 
 ---
 
-# 41. Architecture Decision Records
+# 46. Architecture Decision Records
 
 Significant architectural decisions should be documented under:
 
@@ -1222,7 +1385,7 @@ ADRs are appropriate when a decision:
 
 ---
 
-# 42. Engineering Documentation
+# 47. Engineering Documentation
 
 Deep implementation notes should live under:
 
@@ -1240,7 +1403,7 @@ Engineering documents should explain **how specific subsystems work internally**
 
 ---
 
-# 43. Security Design Principles
+# 48. Security Design Principles
 
 Atlas runtime security is based on practical containment and explicit boundaries rather than claiming Android-level isolation that PRoot does not provide.
 
@@ -1258,7 +1421,7 @@ Core principles:
 
 ---
 
-# 44. Future Architectural Directions
+# 49. Future Architectural Directions
 
 Planned architecture work may include:
 
@@ -1269,7 +1432,7 @@ Git workflows
 workspace snapshots
 backup / restore
 expanded plugin APIs
-PTY support
+broader interactive application coverage
 networking tools
 tablet layouts
 Chromebook support
@@ -1280,7 +1443,7 @@ Each major subsystem should integrate through existing architectural boundaries 
 
 ---
 
-# 45. Desktop and Multi-Device Direction
+# 50. Desktop and Multi-Device Direction
 
 The Android application is the current primary platform.
 
@@ -1297,7 +1460,7 @@ Not every Android implementation detail will be portable, but platform-independe
 
 ---
 
-# 46. Dedicated Hardware Direction
+# 51. Dedicated Hardware Direction
 
 Dedicated Atlas hardware remains exploratory.
 
@@ -1317,7 +1480,7 @@ rather than creating an unrelated second platform.
 
 ---
 
-# 47. Architectural Non-Goals
+# 52. Architectural Non-Goals
 
 Atlas does not currently claim to be:
 
@@ -1326,14 +1489,14 @@ Atlas does not currently claim to be:
 - a full virtual machine
 - a hardware hypervisor
 - a complete desktop Linux environment
-- a general-purpose PTY terminal
+- a replacement for a dedicated desktop terminal emulator
 - an anti-forensics platform
 
 The architecture is designed around a **rootless Linux userspace managed by a native Android application**.
 
 ---
 
-# 48. Architecture Principles Summary
+# 53. Architecture Principles Summary
 
 ```text
 Atlas owns application behavior.
@@ -1341,7 +1504,10 @@ Ubuntu owns Linux userspace behavior.
 
 The controller owns runtime orchestration.
 The backend owns runtime implementation.
-The executor owns guest command execution.
+The executor owns finite guest command execution.
+
+The PTY session controller owns persistent interactive sessions.
+The PTY bridge owns interactive PTY / renderer coordination.
 
 The state machine owns safety rules.
 The circuit breaker owns safety side effects.
