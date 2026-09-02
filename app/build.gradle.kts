@@ -1,3 +1,37 @@
+val atlasReleaseStoreFile =
+    providers
+        .gradleProperty(
+            "ATLAS_RELEASE_STORE_FILE"
+        )
+        .orNull
+
+val atlasReleaseStorePassword =
+    providers
+        .gradleProperty(
+            "ATLAS_RELEASE_STORE_PASSWORD"
+        )
+        .orNull
+
+val atlasReleaseKeyAlias =
+    providers
+        .gradleProperty(
+            "ATLAS_RELEASE_KEY_ALIAS"
+        )
+        .orNull
+
+val atlasReleaseKeyPassword =
+    providers
+        .gradleProperty(
+            "ATLAS_RELEASE_KEY_PASSWORD"
+        )
+        .orNull
+
+val atlasReleaseSigningAvailable =
+    !atlasReleaseStoreFile.isNullOrBlank() &&
+            !atlasReleaseStorePassword.isNullOrBlank() &&
+            !atlasReleaseKeyAlias.isNullOrBlank() &&
+            !atlasReleaseKeyPassword.isNullOrBlank()
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -25,10 +59,60 @@ android {
             "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    /*
+     * Atlas release signing.
+     *
+     * Signing credentials are loaded from the user's
+     * Gradle properties and are never stored in the
+     * Atlas source repository.
+     *
+     * Contributors without signing credentials can
+     * continue building debug versions normally.
+     */
+    signingConfigs {
+
+        if (
+            atlasReleaseSigningAvailable
+        ) {
+
+            create(
+                "atlasRelease"
+            ) {
+
+                storeFile =
+                    file(
+                        atlasReleaseStoreFile!!
+                    )
+
+                storePassword =
+                    atlasReleaseStorePassword
+
+                keyAlias =
+                    atlasReleaseKeyAlias
+
+                keyPassword =
+                    atlasReleaseKeyPassword
+            }
+        }
+    }
+
     buildTypes {
+
         release {
+
             optimization {
                 enable = false
+            }
+
+            if (
+                atlasReleaseSigningAvailable
+            ) {
+
+                signingConfig =
+                    signingConfigs
+                        .getByName(
+                            "atlasRelease"
+                        )
             }
         }
     }
