@@ -1,13 +1,32 @@
 package com.noahrose.pocketlab.feature.linux.runtime.command
 
 import com.noahrose.pocketlab.feature.linux.runtime.ProotLinuxRuntimeBackend
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 object LinuxShellMode {
 
-    @Volatile
-    private var active:
-            Boolean =
-        false
+    /*
+     * ------------------------------------------------
+     * OBSERVABLE SHELL STATE
+     * ------------------------------------------------
+     *
+     * Compose screens must be able to react immediately
+     * when the user enters or exits the Ubuntu shell.
+     *
+     * The StateFlow is the authoritative shell-mode state.
+     * Existing callers may continue using isActive().
+     */
+    private val _activeState =
+        MutableStateFlow(
+            false
+        )
+
+    val activeState:
+            StateFlow<Boolean> =
+        _activeState
+            .asStateFlow()
 
     @Volatile
     private var currentDirectory:
@@ -23,7 +42,7 @@ object LinuxShellMode {
             Boolean {
 
         if (
-            !active
+            !_activeState.value
         ) {
 
             return false
@@ -52,16 +71,18 @@ object LinuxShellMode {
         val process =
             ProotLinuxRuntimeBackend
                 .getProcess()
-                ?: return false
 
         if (
+            process == null ||
             !process.isAlive
         ) {
+
+            reset()
 
             return false
         }
 
-        active =
+        _activeState.value =
             true
 
         currentDirectory =
@@ -180,7 +201,7 @@ object LinuxShellMode {
     private fun refreshWorkingDirectory() {
 
         if (
-            !active
+            !_activeState.value
         ) {
 
             return
@@ -304,7 +325,7 @@ object LinuxShellMode {
 
     private fun reset() {
 
-        active =
+        _activeState.value =
             false
 
         currentDirectory =

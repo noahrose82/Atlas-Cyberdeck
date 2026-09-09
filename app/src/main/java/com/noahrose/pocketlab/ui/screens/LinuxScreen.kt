@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -34,8 +35,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.noahrose.pocketlab.feature.linux.LinuxViewModel
 import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityEntry
 import com.noahrose.pocketlab.feature.linux.runtime.activity.LinuxRuntimeActivityLevel
+import com.noahrose.pocketlab.feature.linux.runtime.command.LinuxShellMode
 import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeCircuitBreaker
 import com.noahrose.pocketlab.feature.linux.runtime.safety.LinuxRuntimeSafetyMode
+import com.noahrose.pocketlab.feature.terminal.interactive.LinuxInteractiveTerminalSessionController
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,6 +66,29 @@ fun LinuxScreen(
 
     val runtimeActivity by
     linuxViewModel.runtimeActivity
+
+    /*
+     * ------------------------------------------------
+     * TERMINAL SESSION SAFETY LOCK
+     * ------------------------------------------------
+     *
+     * Both shell mode and interactive PTY mode expose
+     * observable state, so this screen recomposes as soon
+     * as the user enters or exits either terminal mode.
+     */
+    val linuxShellActive by
+    LinuxShellMode
+        .activeState
+        .collectAsState()
+
+    val interactiveSessionActive by
+    LinuxInteractiveTerminalSessionController
+        .sessionActive
+        .collectAsState()
+
+    val terminalSessionActive =
+        linuxShellActive ||
+                interactiveSessionActive
 
     /*
      * H4E — Linux controls observe the same runtime
@@ -140,16 +166,6 @@ fun LinuxScreen(
 
     val screenScrollState =
         rememberScrollState()
-
-    Button(
-        onClick =
-            onBack
-    ) {
-
-        Text(
-            "Back to Dashboard"
-        )
-    }
 
     Column(
         modifier =
@@ -652,6 +668,54 @@ fun LinuxScreen(
 
         /*
          * ------------------------------------------------
+         * TERMINAL SESSION LOCK MESSAGE
+         * ------------------------------------------------
+         */
+        if (
+            installation.running &&
+            terminalSessionActive
+        ) {
+
+            Text(
+                text =
+                    when {
+
+                        interactiveSessionActive ->
+                            "Stop and Remove are temporarily unavailable while an interactive terminal app is active. Exit nano, vim, or the current terminal app to enable them."
+
+                        linuxShellActive ->
+                            "Stop and Remove are temporarily unavailable while the Ubuntu shell is active. Type 'exit' in Terminal to enable them."
+
+                        else ->
+                            ""
+                    },
+
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .widthIn(
+                            max =
+                                500.dp
+                        ),
+
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurface,
+
+                fontWeight =
+                    FontWeight
+                        .SemiBold,
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodyLarge
+            )
+        }
+
+        /*
+         * ------------------------------------------------
          * RUNTIME SUMMARY MESSAGE
          * ------------------------------------------------
          */
@@ -821,19 +885,21 @@ fun LinuxScreen(
                             },
 
                             enabled =
-                                !runtimeBusy
+                                !runtimeBusy &&
+                                        !terminalSessionActive
                         ) {
 
                             Text(
-                                if (
-                                    runtimeBusy
-                                ) {
+                                when {
 
-                                    "Stopping..."
+                                    runtimeBusy ->
+                                        "Stopping..."
 
-                                } else {
+                                    terminalSessionActive ->
+                                        "Stop Linux — Terminal Active"
 
-                                    "Stop Linux"
+                                    else ->
+                                        "Stop Linux"
                                 }
                             )
                         }
@@ -880,19 +946,21 @@ fun LinuxScreen(
 
                         enabled =
                             !runtimeBusy &&
-                                    normalModeActive
+                                    normalModeActive &&
+                                    !terminalSessionActive
                     ) {
 
                         Text(
-                            if (
-                                normalModeActive
-                            ) {
+                            when {
 
-                                "Remove Linux"
+                                !normalModeActive ->
+                                    "Remove Linux — Safety Locked"
 
-                            } else {
+                                terminalSessionActive ->
+                                    "Remove Linux — Terminal Active"
 
-                                "Remove Linux — Safety Locked"
+                                else ->
+                                    "Remove Linux"
                             }
                         )
                     }
@@ -1317,3 +1385,5 @@ private fun formatRuntimeTimestamp(
         )
     )
 }
+
+
