@@ -1,6 +1,7 @@
 package com.noahrose.pocketlab
 
 import android.app.Application
+import com.noahrose.pocketlab.feature.bridge.AtlasBridgeConnectionManager
 import com.noahrose.pocketlab.feature.filesystem.persistence.PersistenceManager
 import com.noahrose.pocketlab.feature.linux.runtime.network.LinuxGuestDnsManager
 import com.noahrose.pocketlab.feature.system.DeviceInfoProvider
@@ -11,6 +12,9 @@ import com.noahrose.pocketlab.feature.terminal.environment.EnvironmentVariables
 import com.noahrose.pocketlab.feature.terminal.persistence.ShellConfigPersistence
 
 class AtlasApplication : Application() {
+
+    private lateinit var bridgeConnectionManager:
+            AtlasBridgeConnectionManager
 
     override fun onCreate() {
         super.onCreate()
@@ -73,5 +77,22 @@ class AtlasApplication : Application() {
             ShellConfigPersistence
                 .loadEnvironmentVariables()
         )
+
+        /*
+         * Atlas Bridge integration.
+         *
+         * Bridge connectivity is optional and starts
+         * asynchronously after the core Cyberdeck
+         * environment has initialized.
+         *
+         * Failure to reach Atlas Bridge must never
+         * prevent Atlas Cyberdeck from launching.
+         */
+        bridgeConnectionManager =
+            AtlasBridgeConnectionManager(
+                this
+            )
+
+        bridgeConnectionManager.start()
     }
 }

@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -53,6 +54,16 @@ fun SettingsScreen(
     val linuxQuickStartEnabled by
     AtlasSettingsRepository
         .linuxQuickStartEnabled
+        .collectAsState()
+
+    val atlasBridgeEnabled by
+    AtlasSettingsRepository
+        .atlasBridgeEnabled
+        .collectAsState()
+
+    val atlasBridgeAddress by
+    AtlasSettingsRepository
+        .atlasBridgeAddress
         .collectAsState()
 
     var showCredits by
@@ -188,6 +199,139 @@ fun SettingsScreen(
             text =
                 "Quick Start only runs when Ubuntu is installed, " +
                         "Linux is available, and runtime safety is NORMAL.",
+
+            style =
+                MaterialTheme
+                    .typography
+                    .bodySmall,
+
+            color =
+                MaterialTheme
+                    .colorScheme
+                    .onSurfaceVariant
+        )
+
+        Spacer(
+            modifier =
+                Modifier
+                    .height(
+                        24.dp
+                    )
+        )
+
+        /*
+         * ------------------------------------------------
+         * ATLAS BRIDGE
+         * ------------------------------------------------
+         */
+        SettingsSectionTitle(
+            text =
+                "Atlas Bridge"
+        )
+
+        Spacer(
+            modifier =
+                Modifier
+                    .height(
+                        8.dp
+                    )
+        )
+
+        SettingSwitchCard(
+            title =
+                "Enable Atlas Bridge",
+
+            description =
+                "Allow Cyberdeck to connect to a configured Atlas Bridge desktop gateway.",
+
+            checked =
+                atlasBridgeEnabled,
+
+            onCheckedChange = { enabled ->
+
+                AtlasSettingsRepository
+                    .setAtlasBridgeEnabled(
+                        enabled
+                    )
+            }
+        )
+
+        Spacer(
+            modifier =
+                Modifier
+                    .height(
+                        8.dp
+                    )
+        )
+
+        OutlinedTextField(
+            value =
+                atlasBridgeAddress,
+
+            onValueChange = { address ->
+
+                AtlasSettingsRepository
+                    .setAtlasBridgeAddress(
+                        address
+                    )
+            },
+
+            modifier =
+                Modifier
+                    .fillMaxWidth(),
+
+            enabled =
+                atlasBridgeEnabled,
+
+            singleLine =
+                true,
+
+            label = {
+
+                Text(
+                    text =
+                        "Bridge Address"
+                )
+            },
+
+            placeholder = {
+
+                Text(
+                    text =
+                        "http://192.168.1.100:7331"
+                )
+            },
+
+            supportingText = {
+
+                Text(
+                    text =
+                        when {
+
+                            !atlasBridgeEnabled ->
+                                "Bridge is disabled. Cyberdeck will not attempt a connection."
+
+                            atlasBridgeAddress.isBlank() ->
+                                "Enter the desktop Bridge address to begin connecting."
+
+                            else ->
+                                "Configured address: $atlasBridgeAddress"
+                        }
+                )
+            }
+        )
+
+        Spacer(
+            modifier =
+                Modifier
+                    .height(
+                        8.dp
+                    )
+        )
+
+        Text(
+            text =
+                "Atlas Bridge is optional. Cyberdeck continues to operate normally when Bridge is disabled or unavailable.",
 
             style =
                 MaterialTheme

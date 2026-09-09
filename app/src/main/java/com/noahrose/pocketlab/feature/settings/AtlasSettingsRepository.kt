@@ -17,10 +17,21 @@ object AtlasSettingsRepository {
     private const val KEY_ONBOARDING_COMPLETE =
         "onboarding_complete"
 
+    private const val KEY_ATLAS_BRIDGE_ENABLED =
+        "atlas_bridge_enabled"
+
+    private const val KEY_ATLAS_BRIDGE_ADDRESS =
+        "atlas_bridge_address"
+
     private var preferences:
             SharedPreferences? =
         null
 
+    /*
+     * ------------------------------------------------
+     * LINUX QUICK START
+     * ------------------------------------------------
+     */
     private val mutableLinuxQuickStartEnabled =
         MutableStateFlow(
             false
@@ -31,6 +42,11 @@ object AtlasSettingsRepository {
         mutableLinuxQuickStartEnabled
             .asStateFlow()
 
+    /*
+     * ------------------------------------------------
+     * ONBOARDING
+     * ------------------------------------------------
+     */
     private val mutableOnboardingComplete =
         MutableStateFlow(
             false
@@ -42,6 +58,38 @@ object AtlasSettingsRepository {
             .asStateFlow()
 
     /*
+     * ------------------------------------------------
+     * ATLAS BRIDGE
+     * ------------------------------------------------
+     *
+     * Bridge is intentionally disabled by default.
+     *
+     * Cyberdeck must always remain fully usable without
+     * Atlas Bridge, and no meaningless localhost retries
+     * should occur until the user explicitly configures
+     * and enables Bridge connectivity.
+     */
+    private val mutableAtlasBridgeEnabled =
+        MutableStateFlow(
+            false
+        )
+
+    val atlasBridgeEnabled:
+            StateFlow<Boolean> =
+        mutableAtlasBridgeEnabled
+            .asStateFlow()
+
+    private val mutableAtlasBridgeAddress =
+        MutableStateFlow(
+            ""
+        )
+
+    val atlasBridgeAddress:
+            StateFlow<String> =
+        mutableAtlasBridgeAddress
+            .asStateFlow()
+
+    /*
      * Initialize once when Atlas starts.
      *
      * Quick Start defaults to OFF until the user
@@ -49,6 +97,9 @@ object AtlasSettingsRepository {
      *
      * Onboarding defaults to incomplete until the
      * user enters Atlas from the Welcome screen.
+     *
+     * Atlas Bridge defaults to OFF with no configured
+     * address so Cyberdeck never depends on Bridge.
      */
     @Synchronized
     fun initialize(
@@ -85,8 +136,29 @@ object AtlasSettingsRepository {
                     KEY_ONBOARDING_COMPLETE,
                     false
                 )
+
+        mutableAtlasBridgeEnabled.value =
+            sharedPreferences
+                .getBoolean(
+                    KEY_ATLAS_BRIDGE_ENABLED,
+                    false
+                )
+
+        mutableAtlasBridgeAddress.value =
+            sharedPreferences
+                .getString(
+                    KEY_ATLAS_BRIDGE_ADDRESS,
+                    ""
+                )
+                ?.trim()
+                .orEmpty()
     }
 
+    /*
+     * ------------------------------------------------
+     * LINUX QUICK START
+     * ------------------------------------------------
+     */
     fun isLinuxQuickStartEnabled():
             Boolean {
 
@@ -115,6 +187,11 @@ object AtlasSettingsRepository {
             enabled
     }
 
+    /*
+     * ------------------------------------------------
+     * ONBOARDING
+     * ------------------------------------------------
+     */
     fun isOnboardingComplete():
             Boolean {
 
@@ -141,5 +218,69 @@ object AtlasSettingsRepository {
 
         mutableOnboardingComplete.value =
             complete
+    }
+
+    /*
+     * ------------------------------------------------
+     * ATLAS BRIDGE
+     * ------------------------------------------------
+     */
+    fun isAtlasBridgeEnabled():
+            Boolean {
+
+        return mutableAtlasBridgeEnabled
+            .value
+    }
+
+    fun getAtlasBridgeAddress():
+            String {
+
+        return mutableAtlasBridgeAddress
+            .value
+    }
+
+    @Synchronized
+    fun setAtlasBridgeEnabled(
+        enabled: Boolean
+    ) {
+
+        val sharedPreferences =
+            preferences
+                ?: return
+
+        sharedPreferences
+            .edit()
+            .putBoolean(
+                KEY_ATLAS_BRIDGE_ENABLED,
+                enabled
+            )
+            .apply()
+
+        mutableAtlasBridgeEnabled.value =
+            enabled
+    }
+
+    @Synchronized
+    fun setAtlasBridgeAddress(
+        address: String
+    ) {
+
+        val normalizedAddress =
+            address.trim()
+
+        val sharedPreferences =
+            preferences
+                ?: return
+
+        sharedPreferences
+            .edit()
+            .putString(
+                KEY_ATLAS_BRIDGE_ADDRESS,
+                normalizedAddress
+            )
+            .apply()
+
+        mutableAtlasBridgeAddress.value =
+            normalizedAddress
     }
 }

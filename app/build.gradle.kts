@@ -35,6 +35,8 @@ val atlasReleaseSigningAvailable =
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.4.10"
 }
 
 android {
@@ -168,6 +170,8 @@ android {
     }
 }
 
+val ktorVersion = "3.5.2"
+
 dependencies {
 
     implementation(
@@ -218,6 +222,29 @@ dependencies {
 
     implementation(
         "org.apache.commons:commons-compress:1.28.0"
+    )
+
+    /*
+     * Atlas Bridge client.
+     *
+     * Allows Atlas Cyberdeck to connect to the desktop
+     * Bridge, maintain its heartbeat, and disconnect
+     * cleanly.
+     */
+    implementation(
+        "io.ktor:ktor-client-core:$ktorVersion"
+    )
+
+    implementation(
+        "io.ktor:ktor-client-okhttp:$ktorVersion"
+    )
+
+    implementation(
+        "io.ktor:ktor-client-content-negotiation:$ktorVersion"
+    )
+
+    implementation(
+        "io.ktor:ktor-serialization-kotlinx-json:$ktorVersion"
     )
 
     /*
