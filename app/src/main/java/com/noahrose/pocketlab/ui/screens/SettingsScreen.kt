@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,6 +24,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
@@ -36,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -973,6 +976,43 @@ private fun OpenSourceDialog(
     onDismiss: () -> Unit
 ) {
 
+    val context =
+        LocalContext.current
+
+    val noticesText =
+        remember(
+            context
+        ) {
+
+            runCatching {
+
+                context
+                    .resources
+                    .openRawResource(
+                        R.raw.third_party_notices
+                    )
+                    .bufferedReader()
+                    .use { reader ->
+
+                        reader
+                            .readText()
+                    }
+            }
+                .getOrElse {
+
+                    "Third-party license notices could not be loaded."
+                }
+        }
+
+    val noticeLines =
+        remember(
+            noticesText
+        ) {
+
+            noticesText
+                .lines()
+        }
+
     AlertDialog(
         onDismissRequest =
             onDismiss,
@@ -981,92 +1021,34 @@ private fun OpenSourceDialog(
 
             Text(
                 text =
-                    "Open Source"
+                    "Third-Party Licenses"
             )
         },
 
         text = {
 
-            Column {
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(
+                            max =
+                                460.dp
+                        )
+                        .verticalScroll(
+                            rememberScrollState()
+                        )
+            ) {
 
-                Text(
-                    text =
-                        "Atlas Cyberdeck is built with open-source software " +
-                                "and open technologies.",
+                for (
+                line in noticeLines
+                ) {
 
-                    color =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurfaceVariant
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier
-                            .height(
-                                12.dp
-                            )
-                )
-
-                Text(
-                    text =
-                        "Key components include:",
-
-                    fontWeight =
-                        FontWeight.SemiBold
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier
-                            .height(
-                                6.dp
-                            )
-                )
-
-                Text(
-                    text =
-                        "• Android / Jetpack Compose"
-                )
-
-                Text(
-                    text =
-                        "• Ubuntu Linux"
-                )
-
-                Text(
-                    text =
-                        "• PRoot"
-                )
-
-                Text(
-                    text =
-                        "• ConnectBot terminal libraries"
-                )
-
-                Spacer(
-                    modifier =
-                        Modifier
-                            .height(
-                                12.dp
-                            )
-                )
-
-                Text(
-                    text =
-                        "Complete third-party license notices will be " +
-                                "maintained with the Atlas Cyberdeck release.",
-
-                    style =
-                        MaterialTheme
-                            .typography
-                            .bodySmall,
-
-                    color =
-                        MaterialTheme
-                            .colorScheme
-                            .onSurfaceVariant
-                )
+                    LicenseNoticeLine(
+                        rawLine =
+                            line
+                    )
+                }
             }
         },
 
@@ -1086,3 +1068,211 @@ private fun OpenSourceDialog(
     )
 }
 
+@Composable
+private fun LicenseNoticeLine(
+    rawLine: String
+) {
+
+    val line =
+        rawLine
+            .trim()
+
+    when {
+
+        line.isBlank() -> {
+
+            Spacer(
+                modifier =
+                    Modifier
+                        .height(
+                            8.dp
+                        )
+            )
+        }
+
+        line == "---" -> {
+
+            Spacer(
+                modifier =
+                    Modifier
+                        .height(
+                            4.dp
+                        )
+            )
+
+            HorizontalDivider()
+
+            Spacer(
+                modifier =
+                    Modifier
+                        .height(
+                            4.dp
+                        )
+            )
+        }
+
+        line.startsWith(
+            "### "
+        ) -> {
+
+            Text(
+                text =
+                    cleanMarkdownText(
+                        line
+                            .removePrefix(
+                                "### "
+                            )
+                    ),
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleSmall,
+
+                fontWeight =
+                    FontWeight.SemiBold,
+
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .primary
+            )
+        }
+
+        line.startsWith(
+            "## "
+        ) -> {
+
+            Text(
+                text =
+                    cleanMarkdownText(
+                        line
+                            .removePrefix(
+                                "## "
+                            )
+                    ),
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleMedium,
+
+                fontWeight =
+                    FontWeight.Bold,
+
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .primary
+            )
+        }
+
+        line.startsWith(
+            "# "
+        ) -> {
+
+            Text(
+                text =
+                    cleanMarkdownText(
+                        line
+                            .removePrefix(
+                                "# "
+                            )
+                    ),
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleLarge,
+
+                fontWeight =
+                    FontWeight.Bold
+            )
+        }
+
+        line.startsWith(
+            "- "
+        ) -> {
+
+            Text(
+                text =
+                    "• " +
+                            cleanMarkdownText(
+                                line
+                                    .removePrefix(
+                                        "- "
+                                    )
+                            ),
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodySmall,
+
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant
+            )
+        }
+
+        line.matches(
+            Regex(
+                "^\\d+\\..*"
+            )
+        ) -> {
+
+            Text(
+                text =
+                    cleanMarkdownText(
+                        line
+                    ),
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodySmall,
+
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant
+            )
+        }
+
+        else -> {
+
+            Text(
+                text =
+                    cleanMarkdownText(
+                        line
+                    ),
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .bodySmall,
+
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun cleanMarkdownText(
+    text: String
+): String {
+
+    return text
+        .replace(
+            "**",
+            ""
+        )
+        .replace(
+            "`",
+            ""
+        )
+}
