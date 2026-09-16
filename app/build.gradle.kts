@@ -49,7 +49,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.noahrose.pocketlab"
+        applicationId = "com.noahrose.atlascyberdeck"
 
         minSdk = 29
         targetSdk = 36
