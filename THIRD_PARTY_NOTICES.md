@@ -14,6 +14,10 @@ Third-party software remains governed by its respective upstream license.
 - `licenses/GPL-2.0.txt` — GNU General Public License version 2
 - `licenses/SLF4J-MIT.txt` — exact MIT license text extracted from the resolved SLF4J 2.0.18 JAR
 - `licenses/LIBVTERM-MIT.txt` — libvterm MIT license notice
+- `licenses/COMMONS-CODEC-NOTICE.txt` — Apache Commons Codec NOTICE
+- `licenses/COMMONS-COMPRESS-NOTICE.txt` — Apache Commons Compress NOTICE
+- `licenses/COMMONS-IO-NOTICE.txt` — Apache Commons IO NOTICE
+- `licenses/COMMONS-LANG3-NOTICE.txt` — Apache Commons Lang NOTICE
 
 The exact MIT notices for SLF4J and libvterm are also reproduced later in this document so they remain visible in the in-app licenses screen.
 
@@ -101,9 +105,8 @@ Upstream:
 - https://commons.apache.org/proper/commons-io/
 - https://commons.apache.org/proper/commons-lang/
 
-Apache projects may include project-specific `NOTICE` material in addition to the
-Apache-2.0 license. Preserve any applicable NOTICE content from the exact distributed
-artifacts when assembling the final release notice bundle.
+The exact `NOTICE.txt` files from the resolved Apache Commons artifacts are preserved
+under `licenses/` and reproduced in Appendix D below.
 
 ## Google Guava ListenableFuture / Error Prone annotations
 
@@ -448,6 +451,42 @@ THE SOFTWARE.
 
 ---
 
+# Appendix D — Apache Commons NOTICE Files
+
+## Apache Commons Codec 1.19.0 NOTICE
+
+Apache Commons Codec  
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at  
+The Apache Software Foundation (https://www.apache.org/).
+
+## Apache Commons Compress 1.28.0 NOTICE
+
+Apache Commons Compress  
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at  
+The Apache Software Foundation (https://www.apache.org/).
+
+## Apache Commons IO 2.20.0 NOTICE
+
+Apache Commons IO  
+Copyright 2002-2025 The Apache Software Foundation
+
+This product includes software developed at  
+The Apache Software Foundation (https://www.apache.org/).
+
+## Apache Commons Lang 3.18.0 NOTICE
+
+Apache Commons Lang  
+Copyright 2001-2025 The Apache Software Foundation
+
+This product includes software developed at  
+The Apache Software Foundation (https://www.apache.org/).
+
+---
+
 # Release compliance checklist
 
 Before freezing the public release:
@@ -455,7 +494,7 @@ Before freezing the public release:
 1. Keep this file with the released source/repository documentation.
 2. Include `licenses/APACHE-2.0.txt`.
 3. Include `licenses/GPL-2.0.txt`.
-4. Preserve applicable Apache project NOTICE material from the exact artifacts.
+4. Keep the four Apache Commons `NOTICE` files under `licenses/` with the release notice bundle.
 5. Keep `licenses/SLF4J-MIT.txt` and `licenses/LIBVTERM-MIT.txt` with the release notice bundle.
 6. Make corresponding source for the distributed GPL-2.0 PRoot build available.
 7. Keep the recorded PRoot, loader, source-archive, and Ubuntu SHA-256 values with the release provenance.
