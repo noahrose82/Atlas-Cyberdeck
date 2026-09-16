@@ -176,6 +176,13 @@ object LinuxInteractiveProotProcessSpecFactory {
                     " >/dev/null 2>&1 || exit 73; "
                 )
 
+                /*
+                 * Natural interactive-command completion must not signal
+                 * the parent process. The interactive PRoot/script process
+                 * is separate from the persistent Ubuntu runtime, and
+                 * signaling $PPID here can cascade into the runtime and
+                 * incorrectly trip Atlas RUNTIME_PROCESS_LOST.
+                 */
                 append(
                     "atlas_finish() { "
                 )
@@ -198,10 +205,6 @@ object LinuxInteractiveProotProcessSpecFactory {
 
                 append(
                     "; "
-                )
-
-                append(
-                    "kill -TERM \"\$PPID\" >/dev/null 2>&1 || true; "
                 )
 
                 append(
