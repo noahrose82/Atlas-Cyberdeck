@@ -1,18 +1,23 @@
 package com.noahrose.pocketlab.feature.system
 
+import com.noahrose.pocketlab.BuildConfig
+
 object VersionInfo {
 
     const val NAME =
         "Atlas Cyberdeck"
 
-    const val VERSION =
-        "0.13.0-alpha"
+    val VERSION: String
+        get() =
+            BuildConfig.VERSION_NAME
 
-    const val BUILD =
-        "50"
+    val BUILD: String
+        get() =
+            BuildConfig.VERSION_CODE
+                .toString()
 
     const val CODENAME =
-        "Foundation"
+        "Forge"
 
     const val AUTHOR =
         "Atlas Labs"

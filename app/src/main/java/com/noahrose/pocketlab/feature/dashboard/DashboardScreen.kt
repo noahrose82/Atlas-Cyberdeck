@@ -20,6 +20,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.noahrose.pocketlab.feature.system.VersionInfo
 import com.noahrose.pocketlab.ui.components.ActionCard
 import com.noahrose.pocketlab.ui.components.AtlasTopBar
 import com.noahrose.pocketlab.ui.components.SectionHeader
@@ -421,7 +422,7 @@ fun DashboardScreen(
 
             Text(
                 text =
-                    "Atlas Cyberdeck v0.13.0-alpha \"Forge\""
+                    "${VersionInfo.NAME} v${VersionInfo.VERSION} \"${VersionInfo.CODENAME}\""
             )
         }
     }

@@ -129,7 +129,7 @@ android {
 
     buildFeatures {
         compose = true
-    }
+        buildConfig = true }
 
     /*
      * Atlas native runtime packaging.

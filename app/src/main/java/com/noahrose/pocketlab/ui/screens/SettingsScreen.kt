@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.noahrose.pocketlab.R
 import com.noahrose.pocketlab.feature.settings.AtlasSettingsRepository
+import com.noahrose.pocketlab.feature.system.VersionInfo
 
 @Composable
 fun SettingsScreen(
@@ -727,7 +728,7 @@ private fun AboutAtlasCard(
 
             Text(
                 text =
-                    "v0.13.0-alpha",
+                    "v${VersionInfo.VERSION}",
 
                 style =
                     MaterialTheme
@@ -1084,3 +1085,4 @@ private fun OpenSourceDialog(
         }
     )
 }
+
