@@ -12,8 +12,10 @@ Third-party software remains governed by its respective upstream license.
 
 - `licenses/APACHE-2.0.txt` — Apache License 2.0
 - `licenses/GPL-2.0.txt` — GNU General Public License version 2
+- `licenses/SLF4J-MIT.txt` — exact MIT license text extracted from the resolved SLF4J 2.0.18 JAR
+- `licenses/LIBVTERM-MIT.txt` — libvterm MIT license notice
 
-MIT-licensed components are identified below with their upstream project/license locations. Before the final public release artifact is frozen, preserve any copyright and MIT permission notice shipped by the exact resolved artifact.
+The exact MIT notices for SLF4J and libvterm are also reproduced later in this document so they remain visible in the in-app licenses screen.
 
 ---
 
@@ -131,7 +133,7 @@ Upstream:
 Upstream license:
 - https://github.com/qos-ch/slf4j/blob/master/LICENSE.txt
 
-The SLF4J MIT copyright and permission notice must be retained with redistribution.
+The exact SLF4J 2.0.18 MIT notice is included in `licenses/SLF4J-MIT.txt` and reproduced in Appendix B.
 
 ## ConnectBot termlib
 
@@ -152,7 +154,7 @@ Upstream information:
 - https://github.com/connectbot/termlib
 - https://www.leonerd.org.uk/code/libvterm/
 
-The libvterm MIT copyright and permission notice must be retained with redistribution.
+The libvterm MIT notice is included in `licenses/LIBVTERM-MIT.txt` and reproduced in Appendix C.
 
 ## PRoot runtime and external loader
 
@@ -394,6 +396,58 @@ The following coordinates were extracted from the Gradle
 
 ---
 
+# Appendix B — SLF4J 2.0.18 MIT License
+
+Copyright (c) 2004-2022 QOS.ch Sarl (Switzerland)
+All rights reserved.
+
+Permission is hereby granted, free  of charge, to any person obtaining
+a  copy  of this  software  and  associated  documentation files  (the
+"Software"), to  deal in  the Software without  restriction, including
+without limitation  the rights to  use, copy, modify,  merge, publish,
+distribute,  sublicense, and/or sell  copies of  the Software,  and to
+permit persons to whom the Software  is furnished to do so, subject to
+the following conditions:
+
+The  above  copyright  notice  and  this permission  notice  shall  be
+included in all copies or substantial portions of the Software.
+
+THE  SOFTWARE IS  PROVIDED  "AS  IS", WITHOUT  WARRANTY  OF ANY  KIND,
+EXPRESS OR  IMPLIED, INCLUDING  BUT NOT LIMITED  TO THE  WARRANTIES OF
+MERCHANTABILITY,    FITNESS    FOR    A   PARTICULAR    PURPOSE    AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE,  ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+# Appendix C — libvterm MIT License
+
+The MIT License
+
+Copyright (c) 2008 Paul Evans <leonerd@leonerd.org.uk>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+---
+
 # Release compliance checklist
 
 Before freezing the public release:
@@ -402,7 +456,7 @@ Before freezing the public release:
 2. Include `licenses/APACHE-2.0.txt`.
 3. Include `licenses/GPL-2.0.txt`.
 4. Preserve applicable Apache project NOTICE material from the exact artifacts.
-5. Preserve the exact MIT copyright/permission notices for SLF4J and libvterm.
+5. Keep `licenses/SLF4J-MIT.txt` and `licenses/LIBVTERM-MIT.txt` with the release notice bundle.
 6. Make corresponding source for the distributed GPL-2.0 PRoot build available.
 7. Keep the recorded PRoot, loader, source-archive, and Ubuntu SHA-256 values with the release provenance.
 8. Regenerate `releaseRuntimeClasspath` after any dependency change and update this notice before shipping.

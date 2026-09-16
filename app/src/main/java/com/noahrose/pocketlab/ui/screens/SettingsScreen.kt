@@ -358,6 +358,26 @@ fun SettingsScreen(
 
         /*
          * ------------------------------------------------
+         * ATLAS CAT
+         * ------------------------------------------------
+         *
+         * Settings-only personality detail.
+         *
+         * It stays outside the navigation bar and never
+         * interferes with app controls.
+         */
+        SettingsCatWalk()
+
+        Spacer(
+            modifier =
+                Modifier
+                    .height(
+                        18.dp
+                    )
+        )
+
+        /*
+         * ------------------------------------------------
          * ABOUT
          * ------------------------------------------------
          */
@@ -385,35 +405,6 @@ fun SettingsScreen(
                     true
             }
         )
-
-        Spacer(
-            modifier =
-                Modifier
-                    .height(
-                        18.dp
-                    )
-        )
-
-        /*
-         * ------------------------------------------------
-         * ATLAS CAT
-         * ------------------------------------------------
-         *
-         * Settings-only personality detail.
-         *
-         * It stays outside the navigation bar and never
-         * interferes with app controls.
-         */
-        SettingsCatWalk()
-
-        Spacer(
-            modifier =
-                Modifier
-                    .height(
-                        8.dp
-                    )
-        )
-
 
         Spacer(
             modifier =
