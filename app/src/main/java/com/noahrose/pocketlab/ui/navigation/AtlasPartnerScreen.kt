@@ -6,11 +6,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -34,6 +38,8 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.noahrose.pocketlab.feature.bridge.AtlasBridgeClient
+import com.noahrose.pocketlab.feature.partner.terminal.AtlasPartnerTerminalGateway
+import com.noahrose.pocketlab.feature.partner.terminal.AtlasReadOnlyCommand
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.launch
 
@@ -63,6 +69,7 @@ fun AtlasPartnerScreen() {
     var status by remember { mutableStateOf("Not connected") }
     var busy by remember { mutableStateOf(false) }
     var nextMessageId by remember { mutableStateOf(0L) }
+    var pendingCommand by remember { mutableStateOf<AtlasReadOnlyCommand?>(null) }
 
     DisposableEffect(bridgeClient) {
         onDispose { bridgeClient.close() }
@@ -108,6 +115,57 @@ fun AtlasPartnerScreen() {
                 busy = false
             }
         }
+    }
+
+    if (pendingCommand != null) {
+        val command = pendingCommand!!
+        AlertDialog(
+            onDismissRequest = { if (!busy) pendingCommand = null },
+            title = { Text("Approve Ubuntu command?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(command.description)
+                    Text(
+                        command.command,
+                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text("This runs locally in the Ubuntu PRoot runtime on your phone.")
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !busy,
+                    onClick = {
+                        pendingCommand = null
+                        busy = true
+                        addMessage("You approved", command.command)
+                        scope.launch {
+                            try {
+                                val result = AtlasPartnerTerminalGateway.executeApproved(command)
+                                val details = buildString {
+                                    append(result.message)
+                                    if (result.exitCode != null) append(" Exit: ${result.exitCode}.")
+                                    if (result.output.isNotBlank()) append("\n\n" + result.output.take(3500))
+                                    if (result.error.isNotBlank()) append("\n\nError: " + result.error.take(1000))
+                                }
+                                addMessage("Ubuntu", details)
+                            } catch (_: Exception) {
+                                addMessage("System", "Ubuntu command failed to execute.")
+                            } finally {
+                                busy = false
+                            }
+                        }
+                    }
+                ) { Text("Run command") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !busy,
+                    onClick = { pendingCommand = null }
+                ) { Text("Cancel") }
+            }
+        )
     }
 
     Column(
@@ -189,13 +247,28 @@ fun AtlasPartnerScreen() {
                     ) { Text("Log out") }
                 }
                 Text(
-                    "USB development connection only. AI and terminal execution are not connected yet.",
+                    "USB development connection. AI chat is active when Ollama is available; terminal commands require approval.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
         }
 
         HorizontalDivider()
+
+        Text("Ubuntu tools · approval required", style = MaterialTheme.typography.titleSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            AtlasReadOnlyCommand.entries.forEach { command ->
+                OutlinedButton(
+                    onClick = { pendingCommand = command },
+                    enabled = !busy && sessionId != null
+                ) {
+                    Text(command.command)
+                }
+            }
+        }
 
         LazyColumn(
             state = listState,
