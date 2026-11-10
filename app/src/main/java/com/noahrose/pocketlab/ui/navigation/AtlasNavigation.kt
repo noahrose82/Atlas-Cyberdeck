@@ -17,6 +17,7 @@ import com.noahrose.pocketlab.feature.boot.BootScreen
 import com.noahrose.pocketlab.feature.dashboard.DashboardScreen
 import com.noahrose.pocketlab.feature.settings.AtlasSettingsRepository
 import com.noahrose.pocketlab.ui.screens.FilesScreen
+import com.noahrose.pocketlab.ui.screens.AtlasPartnerScreen
 import com.noahrose.pocketlab.ui.screens.LinuxScreen
 import com.noahrose.pocketlab.ui.screens.SettingsScreen
 import com.noahrose.pocketlab.ui.screens.TerminalScreen
@@ -30,6 +31,9 @@ private const val WELCOME_ROUTE =
 
 private const val DASHBOARD_ROUTE =
     "dashboard"
+
+private const val PARTNER_ROUTE =
+    "partner"
 
 private const val TERMINAL_ROUTE =
     "terminal"
@@ -67,6 +71,14 @@ fun AtlasNavigation(
                     "Dashboard",
                 symbol =
                     "⌂"
+            ),
+            NavigationItem(
+                route =
+                    PARTNER_ROUTE,
+                label =
+                    "Partner",
+                symbol =
+                    "✦"
             ),
             NavigationItem(
                 route =
@@ -320,6 +332,12 @@ fun AtlasNavigation(
                             }
                     }
                 )
+            }
+
+            composable(
+                PARTNER_ROUTE
+            ) {
+                AtlasPartnerScreen()
             }
 
             composable(

@@ -1,3 +1,4 @@
+
 package com.noahrose.pocketlab.feature.linux.runtime.process
 
 import com.noahrose.pocketlab.feature.linux.runtime.filesystem.LinuxRuntimePathManager
@@ -481,6 +482,17 @@ object LinuxProotProcessSpecFactory {
                 "PROOT_TMP_DIR" to
                         prootTemporaryDirectory.absolutePath,
 
+                // Ubuntu tools (including ca-certificates) need a guest-visible
+                // writable temporary path, not Android's inherited cache path.
+                "TMPDIR" to
+                        "/tmp",
+
+                "TMP" to
+                        "/tmp",
+
+                "TEMP" to
+                        "/tmp",
+
                 "PROOT_L2S_DIR" to
                         link2SymlinkDirectory.absolutePath,
 
@@ -560,4 +572,5 @@ object LinuxProotProcessSpecFactory {
         )
     }
 }
+
 

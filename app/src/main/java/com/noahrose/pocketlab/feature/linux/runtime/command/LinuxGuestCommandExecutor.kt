@@ -66,6 +66,8 @@ object LinuxGuestCommandExecutor {
                 )
         }
 
+
+
         if (
             safetySnapshot.mode ==
             LinuxRuntimeSafetyMode.RECOVERY_ARMED &&
@@ -526,11 +528,30 @@ object LinuxGuestCommandExecutor {
                         statusMarker
                 )
 
+
             val packageIntegrityFailure =
                 LinuxRuntimeRecoveryPolicy
                     .detectPackageIntegrityFailure(
                         rawError
                     )
+
+            // An authorized repair may legitimately encounter broken package
+            // state. Keep recovery armed instead of tripping back to SAFE_MODE.
+            val recoveryArmed =
+                LinuxRuntimeCircuitBreaker.isRecoveryArmed()
+
+            if (packageIntegrityFailure != null && recoveryArmed) {
+                onErrorLine?.invoke(
+                    "Atlas safety: package audit is not clean; " +
+                            "recovery remains armed."
+                )
+
+                return LinuxGuestCommandResult.Failure(
+                    message = packageIntegrityFailure,
+                    output = commandOutput,
+                    errorOutput = rawError
+                )
+            }
 
             if (
                 packageIntegrityFailure != null
@@ -557,10 +578,6 @@ object LinuxGuestCommandExecutor {
                             rawError
                     )
             }
-
-            val recoveryArmed =
-                LinuxRuntimeCircuitBreaker
-                    .isRecoveryArmed()
 
             if (
                 recoveryArmed &&
@@ -1136,3 +1153,4 @@ object LinuxGuestCommandExecutor {
         }
     }
 }
+
