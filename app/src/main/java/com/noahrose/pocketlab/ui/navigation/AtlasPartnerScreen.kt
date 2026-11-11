@@ -38,6 +38,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.noahrose.pocketlab.feature.bridge.AtlasBridgeClient
+import com.noahrose.pocketlab.feature.partner.local.AtlasNativeProbe
 import com.noahrose.pocketlab.feature.partner.terminal.AtlasPartnerTerminalGateway
 import com.noahrose.pocketlab.feature.partner.terminal.AtlasReadOnlyCommand
 import io.ktor.client.plugins.ResponseException
@@ -61,6 +62,11 @@ fun AtlasPartnerScreen() {
     val scope = rememberCoroutineScope()
     val messages = remember { mutableStateListOf<PartnerEntry>() }
     val listState = rememberLazyListState()
+
+    // JNI smoke test only; this does not mean an offline AI model is loaded.
+    val nativeProbeAvailable = remember {
+        runCatching { AtlasNativeProbe.isAvailable() }.getOrDefault(false)
+    }
 
     var username by remember { mutableStateOf("atlas") }
     var password by remember { mutableStateOf("") }
@@ -86,12 +92,25 @@ fun AtlasPartnerScreen() {
     }
 
     fun sendMessage() {
-        val currentSession = sessionId ?: return
         val outgoing = draft.trim()
         if (outgoing.isEmpty() || busy) return
 
         draft = ""
         addMessage("You", outgoing)
+
+        // Text entry remains available without AtlasBridge.
+        // Offline model inference is not connected yet, so do not fake a reply.
+        val currentSession = sessionId
+        if (currentSession == null) {
+            addMessage(
+                "System",
+                "Message saved in this session. Local AI is not installed yet. " +
+                        "You can run the approved Ubuntu tools without AtlasBridge; " +
+                        "connect to AtlasBridge for AI replies."
+            )
+            return
+        }
+
         busy = true
         scope.launch {
             try {
@@ -190,6 +209,23 @@ fun AtlasPartnerScreen() {
             ) {
                 Text("Partner Core", fontWeight = FontWeight.Bold)
                 Text("Bridge: $status", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    text = if (nativeProbeAvailable) {
+                        "Native engine: Available (JNI probe passed)"
+                    } else {
+                        "Native engine: Unavailable (JNI probe failed)"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (nativeProbeAvailable) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.error
+                    }
+                )
+                Text(
+                    "Offline model: Not loaded yet",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 if (sessionId == null) {
                     OutlinedTextField(
                         value = username,
@@ -247,7 +283,8 @@ fun AtlasPartnerScreen() {
                     ) { Text("Log out") }
                 }
                 Text(
-                    "USB development connection. AI chat is active when Ollama is available; terminal commands require approval.",
+                    "Local Ubuntu tools work without AtlasBridge, with approval. " +
+                            "AI chat currently needs AtlasBridge and Ollama; offline AI is not installed yet.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -263,7 +300,7 @@ fun AtlasPartnerScreen() {
             AtlasReadOnlyCommand.entries.forEach { command ->
                 OutlinedButton(
                     onClick = { pendingCommand = command },
-                    enabled = !busy && sessionId != null
+                    enabled = !busy
                 ) {
                     Text(command.command)
                 }
@@ -294,14 +331,14 @@ fun AtlasPartnerScreen() {
                 onValueChange = { draft = it },
                 label = { Text("Message") },
                 singleLine = true,
-                enabled = sessionId != null && !busy,
+                enabled = !busy,
                 modifier = Modifier.weight(1f),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { sendMessage() })
             )
             Button(
                 onClick = { sendMessage() },
-                enabled = sessionId != null && draft.isNotBlank() && !busy
+                enabled = draft.isNotBlank() && !busy
             ) {
                 if (busy) {
                     CircularProgressIndicator(strokeWidth = 2.dp)

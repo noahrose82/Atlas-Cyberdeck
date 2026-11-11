@@ -34,11 +34,17 @@ android {
         }
     }
 
+
     defaultConfig {
         applicationId = "com.noahrose.atlascyberdeck"
 
         minSdk = 29
         targetSdk = 36
+
+        // Phase 3: Build native AI for the Armor 33 Pro
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
 
         versionCode = 13
         versionName = "0.13.0-alpha"
@@ -46,6 +52,7 @@ android {
         testInstrumentationRunner =
             "androidx.test.runner.AndroidJUnitRunner"
     }
+
 
     /*
      * Atlas release signing.
