@@ -290,6 +290,9 @@ fun AtlasPartnerScreen() {
             }
         }
 
+        // Local GGUF import works without an AtlasBridge session.
+        AtlasLocalModelImportPanel()
+
         HorizontalDivider()
 
         Text("Ubuntu tools · approval required", style = MaterialTheme.typography.titleSmall)
