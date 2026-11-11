@@ -24,7 +24,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -35,13 +34,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import com.noahrose.pocketlab.feature.bridge.AtlasBridgeClient
+import com.noahrose.pocketlab.feature.bridge.AtlasPartnerSession
 import com.noahrose.pocketlab.feature.partner.local.AtlasNativeProbe
 import com.noahrose.pocketlab.feature.partner.terminal.AtlasPartnerTerminalGateway
 import com.noahrose.pocketlab.feature.partner.terminal.AtlasReadOnlyCommand
-import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.launch
 
 private data class PartnerEntry(
@@ -58,7 +55,6 @@ private data class PartnerEntry(
  */
 @Composable
 fun AtlasPartnerScreen() {
-    val bridgeClient = remember { AtlasBridgeClient("http://127.0.0.1:7331") }
     val scope = rememberCoroutineScope()
     val messages = remember { mutableStateListOf<PartnerEntry>() }
     val listState = rememberLazyListState()
@@ -68,18 +64,10 @@ fun AtlasPartnerScreen() {
         runCatching { AtlasNativeProbe.isAvailable() }.getOrDefault(false)
     }
 
-    var username by remember { mutableStateOf("atlas") }
-    var password by remember { mutableStateOf("") }
-    var sessionId by remember { mutableStateOf<String?>(null) }
     var draft by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("Not connected") }
     var busy by remember { mutableStateOf(false) }
     var nextMessageId by remember { mutableStateOf(0L) }
     var pendingCommand by remember { mutableStateOf<AtlasReadOnlyCommand?>(null) }
-
-    DisposableEffect(bridgeClient) {
-        onDispose { bridgeClient.close() }
-    }
 
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
@@ -100,8 +88,7 @@ fun AtlasPartnerScreen() {
 
         // Text entry remains available without AtlasBridge.
         // Offline model inference is not connected yet, so do not fake a reply.
-        val currentSession = sessionId
-        if (currentSession == null) {
+        if (!AtlasPartnerSession.isConnected) {
             addMessage(
                 "System",
                 "Message saved in this session. Local AI is not installed yet. " +
@@ -114,21 +101,14 @@ fun AtlasPartnerScreen() {
         busy = true
         scope.launch {
             try {
-                val result = bridgeClient.partnerChat(currentSession, outgoing)
-                status = result.status
+                val result = AtlasPartnerSession.chat(outgoing)
                 addMessage("AtlasBridge", result.message)
             } catch (error: Exception) {
-                status = if (error is ResponseException &&
-                    error.response.status.value == 401
-                ) {
-                    sessionId = null
-                    "Session expired — log in again"
-                } else {
-                    "Request failed"
-                }
                 addMessage(
                     "System",
-                    "Could not send message. Check that AtlasBridge is running and USB forwarding is active."
+                    "Could not send message. Check the Bridge connection in Settings " +
+                            "and ensure USB forwarding is active if you are using USB. " +
+                            "${AtlasPartnerSession.status}"
                 )
             } finally {
                 busy = false
@@ -208,7 +188,7 @@ fun AtlasPartnerScreen() {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text("Partner Core", fontWeight = FontWeight.Bold)
-                Text("Bridge: $status", style = MaterialTheme.typography.bodySmall)
+                Text("Bridge: ${AtlasPartnerSession.status}", style = MaterialTheme.typography.bodySmall)
                 Text(
                     text = if (nativeProbeAvailable) {
                         "Native engine: Available (JNI probe passed)"
@@ -226,62 +206,10 @@ fun AtlasPartnerScreen() {
                     "Offline model: Not loaded yet",
                     style = MaterialTheme.typography.bodySmall
                 )
-                if (sessionId == null) {
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = { username = it },
-                        label = { Text("Bridge username") },
-                        singleLine = true,
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = { Text("Bridge password") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
-                    )
-                    Button(
-                        onClick = {
-                            if (busy || username.isBlank() || password.isEmpty()) return@Button
-                            busy = true
-                            status = "Signing in..."
-                            scope.launch {
-                                try {
-                                    val result = bridgeClient.login(username.trim(), password)
-                                    sessionId = result.sessionId
-                                    status = "Authenticated as ${result.username}"
-                                } catch (error: Exception) {
-                                    status = "Login failed — check credentials and Bridge connection"
-                                } finally {
-                                    password = ""
-                                    busy = false
-                                }
-                            }
-                        },
-                        enabled = !busy && username.isNotBlank() && password.isNotEmpty()
-                    ) { Text("Connect to AtlasBridge") }
-                } else {
-                    OutlinedButton(
-                        enabled = !busy,
-                        onClick = {
-                            val oldSession = sessionId ?: return@OutlinedButton
-                            sessionId = null
-                            status = "Disconnected"
-                            scope.launch {
-                                try {
-                                    bridgeClient.logout(oldSession)
-                                } catch (_: Exception) {
-                                    // Local session has already been cleared.
-                                }
-                            }
-                        }
-                    ) { Text("Log out") }
-                }
+                Text(
+                    "Bridge sign-in and model management are under Settings.",
+                    style = MaterialTheme.typography.bodySmall
+                )
                 Text(
                     "Local Ubuntu tools work without AtlasBridge, with approval. " +
                             "AI chat currently needs AtlasBridge and Ollama; offline AI is not installed yet.",
@@ -289,9 +217,6 @@ fun AtlasPartnerScreen() {
                 )
             }
         }
-
-        // Local GGUF import works without an AtlasBridge session.
-        AtlasLocalModelImportPanel()
 
         HorizontalDivider()
 

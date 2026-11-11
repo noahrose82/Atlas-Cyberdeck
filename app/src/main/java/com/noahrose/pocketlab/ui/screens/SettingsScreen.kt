@@ -24,6 +24,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -36,18 +38,22 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.noahrose.pocketlab.R
+import com.noahrose.pocketlab.feature.bridge.AtlasPartnerSession
 import com.noahrose.pocketlab.feature.settings.AtlasSettingsRepository
 import com.noahrose.pocketlab.feature.system.VersionInfo
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -69,6 +75,11 @@ fun SettingsScreen(
     AtlasSettingsRepository
         .atlasBridgeAddress
         .collectAsState()
+
+    val bridgeScope = rememberCoroutineScope()
+    var bridgeUsername by remember { mutableStateOf("atlas") }
+    var bridgePassword by remember { mutableStateOf("") }
+    var bridgeLoginError by remember { mutableStateOf<String?>(null) }
 
     var showCredits by
     remember {
@@ -334,6 +345,68 @@ fun SettingsScreen(
         )
 
         Text(
+            text = "Partner authentication: ${AtlasPartnerSession.status}",
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        if (!AtlasPartnerSession.isConnected) {
+            OutlinedTextField(
+                value = bridgeUsername,
+                onValueChange = { bridgeUsername = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Bridge username") },
+                enabled = !AtlasPartnerSession.busy
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedTextField(
+                value = bridgePassword,
+                onValueChange = { bridgePassword = it },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("Bridge password") },
+                visualTransformation = PasswordVisualTransformation(),
+                enabled = !AtlasPartnerSession.busy
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Button(
+                onClick = {
+                    val address = atlasBridgeAddress.trim().ifBlank {
+                        "http://127.0.0.1:7331"
+                    }
+                    val user = bridgeUsername.trim()
+                    val secret = bridgePassword
+                    bridgePassword = ""
+                    bridgeLoginError = null
+                    bridgeScope.launch {
+                        try {
+                            AtlasPartnerSession.login(address, user, secret)
+                        } catch (_: Exception) {
+                            bridgeLoginError = "Could not sign in. Check the Bridge address and credentials."
+                        }
+                    }
+                },
+                enabled = !AtlasPartnerSession.busy &&
+                        bridgeUsername.isNotBlank() && bridgePassword.isNotEmpty()
+            ) { Text("Connect to AtlasBridge") }
+        } else {
+            Text("Signed in as ${AtlasPartnerSession.username ?: "user"}")
+            OutlinedButton(
+                enabled = !AtlasPartnerSession.busy,
+                onClick = { bridgeScope.launch { AtlasPartnerSession.logout() } }
+            ) { Text("Log out") }
+        }
+        bridgeLoginError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        Text(
+            "For USB development, set Bridge Address to http://127.0.0.1:7331. " +
+                    "Credentials and session IDs are kept only in app memory.",
+            style = MaterialTheme.typography.bodySmall
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
             text =
                 "Atlas Bridge is optional. Cyberdeck continues to operate normally when Bridge is disabled or unavailable.",
 
@@ -354,6 +427,27 @@ fun SettingsScreen(
                     .height(
                         24.dp
                     )
+        )
+
+        /*
+         * ------------------------------------------------
+         * LOCAL AI MODEL
+         * ------------------------------------------------
+         */
+        SettingsSectionTitle(
+            text = "Local AI"
+        )
+
+        Spacer(
+            modifier = Modifier.height(8.dp)
+        )
+
+        // Configure local GGUF models here, not in the Partner conversation.
+        // This panel works without AtlasBridge.
+        AtlasLocalModelImportPanel()
+
+        Spacer(
+            modifier = Modifier.height(24.dp)
         )
 
         /*
